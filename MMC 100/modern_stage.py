@@ -65,7 +65,7 @@ class StageControl(MotorHAL):
         self._last_position = 0.0 # (0.0 , 0.0, 0.0) 
         self._is_homed = False
     
-    async def connect(self) -> bool:
+    async def connect(self):
         """ 
         Built to match the SiEPIC code base setup, more simple approach
         
@@ -80,13 +80,13 @@ class StageControl(MotorHAL):
                             timeout=self.timeout
                         )
                 
-                if not self._serial_port._is_open:
+                if not self._serial_port.is_open:
                     self._serial_port.open()
 
                 # Init axis
-                self._send_command(f"{self.AXIS_MAP[self.axis]}SM3")  # Closed loop mode
+                self._send_command(f"{self.AXIS_MAP[self.axis]}FBK3")  # Closed loop mode
                 time.sleep(0.1)
-                self._send_command(f"{self.AXIS_MAP[self.axis]}VA{self._velocity * 0.001}")  # Set velocity
+                self._send_command(f"{self.AXIS_MAP[self.axis]}VEL{self._velocity * 0.001}")  # Set velocity
                 time.sleep(0.1)
 
                 # Connection successful
@@ -111,7 +111,7 @@ class StageControl(MotorHAL):
         """
         Send a command to the motor drivers via serial, opt receive response
         """
-        while self._serial_lock():
+        with self._serial_lock():
             if not self._serial_port or not self._serial_port.is_open:
                 raise ConnectionError("Serial port not connected")
 
@@ -190,7 +190,7 @@ class StageControl(MotorHAL):
             except Exception as e:
                 self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
                 return False
-        return await asyncio.get_event_loop().run_in_executor(self._executer, _move_rel)
+        return await asyncio.get_event_loop().run_in_executor(self._executor, _move_rel)
     
     async def stop(self) -> bool:
         """
@@ -206,7 +206,7 @@ class StageControl(MotorHAL):
                 
         return await asyncio.get_event_loop().run_in_executor(self._executor, _stop)
 
-    async def emergency_stop(self) -> bool:
+    async def emergency_stop(self):
         """
         Emergency stop all axes
         """
