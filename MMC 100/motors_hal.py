@@ -1,3 +1,10 @@
+from abc import ABC, abstractmethod
+from enum import Enum
+from typing import Optional, Callable, Dict, Any, List
+import asyncio
+import time
+from dataclasses import dataclass
+
 """
 Hardware Abstraction Layer for Multi-Axis Stage Control 
 
@@ -6,14 +13,6 @@ Cameron Basara, 5/29/2025
 This HAL provides a clean, unified interface for controlling various motor stages
 while hiding the complexity of the underlying legacy drivers.
 """
-
-from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Optional, Callable, Dict, Any, List
-import asyncio
-import time
-from dataclasses import dataclass
-
 
 class AxisType(Enum):
     """Standardized axis types across all motor systems"""
@@ -145,13 +144,18 @@ class MotorHAL(ABC):
     async def home(self, direction: int = 0) -> bool:
         """Home the axis. direction: 0=negative limit, 1=positive limit"""
         pass
+
+    @abstractmethod
+    async def home_limits(self) -> bool:
+        """Home the software limits, if available. Zeros at negative limit"""
+        pass
     
     @abstractmethod
     async def set_zero(self) -> bool:
         """Set current position as zero reference."""
         pass
     
-    #  Utility Methods 
+    # Utility Methods 
     async def wait_for_completion(self, timeout: Optional[float] = None) -> bool:
         """Wait for current move to complete."""
         start_time = time.time()
