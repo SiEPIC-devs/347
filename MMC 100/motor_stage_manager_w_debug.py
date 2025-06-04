@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
 import time
+
 from motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
 from modern_stage import StageControl
 
@@ -270,8 +271,20 @@ class StageManager:
             'configuration': self.config.__dict__
         }
 
-    async def disconnect(self):
+    async def disconnect_all(self):
+        """Disconnect all motors"""
         for m in self.motors.values():
             await self._safe_execute("disconnect", m.disconnect())
         self.motors.clear()
         self._last_positions.clear()
+
+    async def disconnect(self, axis: AxisType):
+        """
+        Disconnect a single motor
+
+        Args:
+            axis[AxisType]: axis you wish to disconnect
+        """
+        await self._safe_execute("disconnect", axis.disconnect())
+        del self.motors[axis]
+        del self._last_positions[axis]

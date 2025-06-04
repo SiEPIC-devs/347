@@ -56,7 +56,6 @@ class StageControl(MotorHAL):
             AxisType.ALL: 0
             }
     
-    # Default settings for 347
     def __init__(self, axis : AxisType, com_port: str = _GLOBAL_COM_PORT,
                  baudrate: int = _GLOBAL_BAUDRATE, timeout: float = _GLOBAL_TIMEOUT,
                  velocity: float = 1000.0, acceleration: float = 5000.0,
@@ -359,7 +358,7 @@ class StageControl(MotorHAL):
         
         return target_position is not None
     
-    async def stop(self) -> bool:
+    async def stop(self):
         """
         Stop motor motion
         """
