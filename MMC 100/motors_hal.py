@@ -86,6 +86,17 @@ class MotorHAL(ABC):
         self._event_callbacks: List[Callable[[MotorEvent], None]] = []
         self._config: Optional[MotorConfig] = None
     
+    #  Init
+    @abstractmethod
+    async def connect(self) -> bool:
+        """Connect to a motor"""
+        pass
+
+    @abstractmethod
+    async def disconnect(self) -> Optional[bool]:
+        """Disconnect from a motor"""
+        pass
+        
     #  Core Movement Interface 
     @abstractmethod
     async def move_absolute(self, position: float, velocity: Optional[float] = None) -> bool:

@@ -1,11 +1,11 @@
 import asyncio
 import time
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Callable
 # from dataclasses import replace
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType
+from motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
 import serial
 
 """
@@ -652,3 +652,28 @@ class StageControl(MotorHAL):
             'last_position': self._last_position,
             'position_tolerance': self._position_tolerance
         }
+
+    # Event handling methods
+    # def add_event_callback(self, callback: Callable[[MotorEvent], None]):
+    #     """Register callback for motor events."""
+    #     self._event_callbacks.append(callback)
+    
+    # def remove_event_callback(self, callback: Callable[[MotorEvent], None]):
+    #     """Remove event callback."""
+    #     if callback in self._event_callbacks:
+    #         self._event_callbacks.remove(callback)
+    
+    # def _emit_event(self, event_type: MotorEventType, data: Dict[str, Any] = None):
+    #     """Emit event to all registered callbacks."""
+    #     event = MotorEvent(
+    #         axis=self.axis,
+    #         event_type=event_type,
+    #         data=data or {},
+    #         timestamp=time.time()
+    #     )
+    #     for callback in self._event_callbacks:
+    #         try:
+    #             callback(event)
+    #         except Exception as e:
+    #             print(f"Error in event callback: {e}")
+

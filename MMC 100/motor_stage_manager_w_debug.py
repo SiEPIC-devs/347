@@ -143,7 +143,7 @@ class StageManager:
             if ok:
                 self.motors[axis] = motor
                 self._last_positions[axis] = 0.0
-                motor.add_event_listener(self._on_event)
+                motor.add_event_callback(self._on_event)
             results[axis] = ok
         return all(results.values())
 
