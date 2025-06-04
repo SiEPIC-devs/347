@@ -169,7 +169,7 @@ class StageManager:
         return ok
 
     @requires_motor
-    async def move_single_axis(self, axis: AxisType, pos: float,
+    async def move_single_axis(self, axis: AxisType, position: float,
                                relative=False, velocity=None,
                                wait_for_completion=True) -> bool:
         """
@@ -177,7 +177,7 @@ class StageManager:
 
         Args:
             axis[AxisType]: axis you want to move eg. AxisType.X (or something nice like x_axis = AxisType.X)
-            pos[Float]: Desired position for absolute or relative distance (+/-) 
+            position[Float]: Desired position for absolute or relative distance (+/-) 
             relative[bool]: False by default, set true if you want to send a relative movement command
             velocity: Optional velocity override, useless right now
             wait_for_completion: If True, wait for move to complete and emit MOVE_COMPLETED event
@@ -187,14 +187,14 @@ class StageManager:
         """
         if relative:
             ok = await self._safe_execute(f"move_relative {axis.name}", 
-                    self.motors[axis].move_relative(pos, velocity, wait_for_completion)) 
+                    self.motors[axis].move_relative(position, velocity, wait_for_completion)) 
             if ok:
-                self._last_positions[axis] += pos
+                self._last_positions[axis] += position
         else:
             ok = await self._safe_execute(f"move_absolute {axis.name}",
-                    self.motors[axis].move_absolute(pos, velocity, wait_for_completion))
+                    self.motors[axis].move_absolute(position, velocity, wait_for_completion))
             if ok:
-                self._last_positions[axis] = pos
+                self._last_positions[axis] = position
         return ok
 
     # async def move_multiple_axes(self, cmd):
@@ -229,7 +229,7 @@ class StageManager:
         return await self._safe_execute("emergency_stop", motor.emergency_stop())
 
     @requires_motor
-    async def get_position(self, axis) -> Optional[Position]:
+    async def get_position(self, axis: AxisType) -> Optional[Position]:
         return await self._safe_execute(f"get_position {axis.name}", self.motors[axis].get_position(), default=None)
 
     async def get_all_positions(self):
