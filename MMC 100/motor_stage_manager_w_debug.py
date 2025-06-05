@@ -110,6 +110,7 @@ class StageManager:
     async def _safe_execute(self, desc: str, coro, default=False):
         """Runs awaits a coroutine passed, try + except log in 1 line"""
         try:
+            logger.info(f"{desc}")
             return await coro
         except Exception as e:
             logger.error(f"Error {desc}: {e}")

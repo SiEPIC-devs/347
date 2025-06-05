@@ -510,14 +510,17 @@ class StageControl(MotorHAL):
         def _home():
             try:
                 self._emit_event(MotorEventType.MOVE_STARTED, {'operation': 'homing'})
+                print("Homing begins    \n")
                 
                 if direction == 0:
+                    print("Move to negative limit")
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MLN")  # Move to negative limit
                 else:
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MLP")  # Move to positive limit
                 
                 # Wait for completion
                 while True:
+                    print("Wait for completion")
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
                     status = int(response)
                     if (status >> 3) & 1:  # Stopped
@@ -525,6 +528,7 @@ class StageControl(MotorHAL):
                     time.sleep(0.1)
                 
                 # Set zero point
+                print("Set zero point")
                 self._send_command(f"{self.AXIS_MAP[self.axis]}ZRO")
                 self._is_homed = True # todo: check if homed is for specific axis, check super config may be fine
                 self._last_position = 0.0  # Reset position tracking
