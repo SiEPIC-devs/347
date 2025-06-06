@@ -157,42 +157,19 @@ class StageControl(MotorHAL):
         """
         Send query command and wait for response
         """
-        # with self._serial_lock:
-        #     if not self._serial_port or not self._serial_port.is_open:
-        #         raise ConnectionError("Serial port not connected")
-                
-        #     self._serial_port.write((cmd + "\r\n").encode('ascii'))
-        #     raw = self._serial_port.read(10) # read 10 byte
-        #     print(f"raw: {raw}\n")
-        #     response = raw.decode('ascii', errors='ignore').strip() # try
-        #     print(f"Response: {response}\n")
-        #     return response.strip('#').strip('\r\n')
         with self._serial_lock:
             if not self._serial_port or not self._serial_port.is_open:
                 raise ConnectionError("Serial port not connected")
-            
-            self._serial_port.reset_input_buffer()
+                
             self._serial_port.write((cmd + "\r\n").encode('ascii'))
-            time.sleep(0.2)
-            
-            raw = self._serial_port.read(20)  # Read more bytes
-            
-            print(f"Raw bytes: {raw}")
-            print(f"Hex: {raw.hex()}")
-            print(f"Individual bytes: {[hex(b) for b in raw]}")
-            print(f"ASCII (ignore errors): '{raw.decode('ascii', errors='ignore')}'")
-            print(f"Printable chars: {''.join(chr(b) if 32 <= b <= 126 else '.' for b in raw)}")
-            
-            # Try to identify patterns
-            if len(raw) >= 6:
-                print(f"First 3 bytes: {raw[:3].hex()}")
-                print(f"Last 3 bytes: {raw[-3:].hex()}")
-                print(f"Middle section: {raw[3:-3]}")
-            
-            response = raw.decode('ascii', errors='ignore').strip() # try
-            # print(f"Response: {response}\n")
+            raw = self.serial_port.read_until("\n\r").decode("ascii")
+            raw = raw.strip("#").strip("\n\r")
+
+            print(f"raw: {raw}\n")
+            response = bin(int(raw, base=10))[2[:None]][4]
+            print(f"Response: {response}\n")
             return response.strip('#').strip('\r\n')
-        
+
     async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):
         """
         Monitor move completion and emit MOVE_COMPLETED event when done
