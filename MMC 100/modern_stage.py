@@ -173,7 +173,14 @@ class StageControl(MotorHAL):
                 status_bit = (status_byte >> 3) & 0x01 # mask status bit with 1
                 print(f"byte: {status_byte} bit: {status_bit}")
                 return str(status_bit)
+            elif "POS?" in cmd:
+                if len(raw) == 0:
+                    raise Exception("No data received")
+                raw = raw.strip('#').strip("\n\r")
+                raw = raw.split(',')
+                return raw
 
+            
             else:
                 raw = raw.strip('#').strip("\n\r")
                 return raw
@@ -193,13 +200,13 @@ class StageControl(MotorHAL):
                     status_int = int(response)
                     
                     # Check bit 3 (moving[0]/stopped[1])
-                    is_stopped = (status_int >> 3) & 1
+                    # is_stopped = status_int & 1
                     
-                    if is_stopped:
+                    if status_int:
                         # Motor has stopped, now check if we're at target position
                         pos_response = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
-                        parts = pos_response.split(',')
-                        current_position_mm = float(parts[0])
+                        # parts = pos_response.split(',')
+                        current_position_mm = float(pos_response[0])
                         current_position_um = current_position_mm * 1000
                         
                         # Update our cached position
@@ -416,9 +423,9 @@ class StageControl(MotorHAL):
                 print(f"RESP: {response}\n") # Debug
                 
                 # Parse response: "position,encoder_position"
-                parts = response.split(',')
-                theoretical_mm = float(parts[0])
-                actual_mm = float(parts[1])  
+                # parts = response.split(',')
+                theoretical_mm = float(response[0])
+                actual_mm = float(response[1])  
                 
                 # Convert mm to um
                 theoretical_um = theoretical_mm * 1000
@@ -450,10 +457,10 @@ class StageControl(MotorHAL):
                 status_int = int(response)
                 
                 # Check bit 3 (moving[0]/stopped[1])
-                if (status_int >> 3) & 1:
+                if status_int:
                     return MotorState.IDLE
-                else:
-                    return MotorState.MOVING
+                
+                return MotorState.MOVING # else
                     
             except Exception as e:
                 print(f"State read error: {e}")
@@ -543,7 +550,7 @@ class StageControl(MotorHAL):
                     print(status)
                     # if (status >> 3) & 1:  # Stopped
                     #     break
-                    if status & 1: break
+                    if status: break
                     time.sleep(0.1)
                 
                 # Set zero point
@@ -583,7 +590,7 @@ class StageControl(MotorHAL):
                 while True:
                     response = self._query_command(f"{axis_num}STA?")
                     status = int(response)
-                    if (status >> 3) & 1:  # Stopped
+                    if status:  # Stopped
                         break
                     time.sleep(0.1)
 
@@ -609,7 +616,7 @@ class StageControl(MotorHAL):
                 while True:
                     response = self._query_command(f"{axis_num}STA?")
                     status = int(response)
-                    if (status >> 3) & 1:  # Stopped
+                    if status:  # Stopped
                         break
                     time.sleep(0.1)
 
