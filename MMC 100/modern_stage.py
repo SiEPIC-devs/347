@@ -169,9 +169,7 @@ class StageControl(MotorHAL):
                 if len(raw) == 0:
                     raise Exception("No data received")
                 
-                status_byte = raw[-1] # Extract last byte
-                for i in status_byte:
-                    print(i)
+                status_byte = raw[0] # Extract last byte
                 status_bit = (status_byte >> 3) & 0x01 # mask status bit with 1
                 print(f"byte: {status_byte} bit: {status_bit}")
                 return str(status_bit)
