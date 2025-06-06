@@ -167,7 +167,8 @@ class StageControl(MotorHAL):
                 raw = self._serial_port.read(1)
                 print(f"raw: {raw}")
                 if len(raw) == 0:
-                    raise Exception("No data received")
+                    print("No data received")
+                    return "No"
                 
                 status_byte = raw[0] # Extract last byte
                 status_bit = (status_byte >> 3) & 1 # mask status bit with 1
@@ -545,6 +546,11 @@ class StageControl(MotorHAL):
                 # Wait for completion
                 while True:
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
+                    
+                    # If not data received
+                    if response == "No":
+                        continue
+                    
                     print(f"STA?: {response}")
                     status = int(response)
                     print(status)
