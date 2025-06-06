@@ -168,11 +168,11 @@ class StageControl(MotorHAL):
             if "STA?" in cmd:
                 raw = self._serial_port.read(20)
                 self._placeholder = raw if len(raw) != 0 else self._placeholder
-                print(f"raw: {raw}")
+                # print(f"raw: {raw}")
 
                 if len(raw) == 0:
                     print("No data received, using last known raw data")
-                    print(self._placeholder)
+                    # print(self._placeholder)
                     status_byte = self._placeholder[1]
                     status_bit = (status_byte >> 3) & 1
                     print(f"byte: {status_byte} bit: {status_bit}")
@@ -186,8 +186,12 @@ class StageControl(MotorHAL):
             elif "POS?" in cmd:
                 raw = self._serial_port.read(20)
                 print(f"raw: {raw}")
-                if len(raw) == 0:
-                    raise Exception("No data received")
+                count = 0
+                while len(raw) == 0:
+                    raw = self._serial_port.read(20)
+                    count += 1
+                    if count > 10:
+                        raise Exception("No data received")
                 raw = raw.strip('#').strip("\n\r")
                 raw = raw.split(',')
                 return raw
@@ -580,9 +584,9 @@ class StageControl(MotorHAL):
                 # Wait for completion
                 while True:
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
-                    print(f"STA?: {response}")
+                    # print(f"STA?: {response}")
                     status = int(response)
-                    print(status)
+                    # print(status)
                     # if (status >> 3) & 1:  # Stopped
                     #     break
                     if status: break
