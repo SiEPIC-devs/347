@@ -34,11 +34,13 @@ async def demo():
     z = AxisType.Z
     fr = AxisType.ROTATION_FIBER
     cp = AxisType.ROTATION_CHIP
+
+    all = [x,y,z,fr,cp] # all
     
     print(f"x: {x}") # sanity check
 
     print(">>> Initializing X …")
-    ok = await mgr.initialize(axes=[x])
+    ok = await mgr.initialize(axes=all)
     if not ok:
         print(f"init failed")
         await mgr.disconnect_all()
@@ -48,20 +50,32 @@ async def demo():
 
     # Register our print_event handler
     # mgr.motors[x].add_event_callback(print_event) # todo: Hmm weird syntax way of doing it
-
+    """
+    ###    X&Y HOMING SEQUENCE POS TO NEG
     # Home X (positive limit)
     print("\n>>> Homing X pos…")
     homed = await mgr.home_axis(x, direction=1)
     # done = await mgr.wait_for_home_completion(x)
     print(f"Home X returned: {homed}")
     
+    # Home Y (positive limit)
+    print("\n>>> Homing Y pos…")
+    homed = await mgr.home_axis(y, direction=1)
+    # done = await mgr.wait_for_home_completion(x)
+    print(f"Home X returned: {homed}")
 
     # Home X (negative limit)
     print("\n>>> Homing X neg…")
     homed = await mgr.home_axis(x, direction=0)
     # done = await mgr.wait_for_home_completion(x)
     print(f"Home X returned: {homed}")
-    
+
+    # Home Y (negative limit)
+    print("\n>>> Homing Y neg…")
+    homed = await mgr.home_axis(y, direction=0)
+    # done = await mgr.wait_for_home_completion(x)
+    print(f"Home X returned: {homed}")
+    """
 
     # # Move X to 0 um (absolute)
     # print("\n>>> Moving X to 0 um (absolute) …")
@@ -84,6 +98,21 @@ async def demo():
         print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
     else:
         print("Could not read X position.")
+
+    # Ask for Y’s current position
+    print("\n>>> Querying Y’s position …")
+    pos_obj = await mgr.get_position(y)
+    if pos_obj:
+        print(f"Y actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
+    else:
+        print("Could not read X position.")
+
+    # Ask for all init axis positions
+    pos_obj_all = await mgr.get_all_positions()
+    if pos_obj_all:
+        print(f"posobj : \n {pos_obj_all}")
+    else:
+        print("Error in all positions")
 
     # 9) Disconnect everything
     print("\n>>> Disconnecting …")

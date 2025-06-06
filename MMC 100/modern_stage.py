@@ -583,7 +583,6 @@ class StageControl(MotorHAL):
                 # Wait for completion
                 while True:
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
-                    # print(f"STA?: {response}")
                     status = int(response)
                     if status == 1: break
                     time.sleep(0.3)
@@ -599,10 +598,10 @@ class StageControl(MotorHAL):
                 else:
                     # For homing purposes, it should always be the negative limit
                     print("Set positive limit")
-                    # pos = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
-                    # self._last_position = float(pos[0]) * 1000.0 # mm to um
-                    self._last_position = 1000 # placeholder number
-                    # print(f"last pos: {self._last_position}")
+                    pos = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
+                    self._last_position = float(pos[0]) * 1000.0 # mm to um
+                    self._position_limits = (self._position_limits[0], self._last_position)
+                    print(f"last pos: {self._last_position}")
                     self._is_homed = True
 
                 self._emit_event(MotorEventType.HOMED, {'direction': direction})
