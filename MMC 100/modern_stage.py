@@ -162,17 +162,21 @@ class StageControl(MotorHAL):
                 raise ConnectionError("Serial port not connected")
                 
             self._serial_port.write((cmd + "\r\n").encode('ascii'))
-            raw = self._serial_port.read(10)
+            raw = self._serial_port.read(20)
             print(f"raw: {raw}")
-            
-            # Extract just the printable character and convert to int
-            response_char = ''.join(chr(b) for b in raw if 32 <= b <= 126)
-            print(f"Response char: {response_char}")
-            
-            if response_char:
-                return ord(response_char[0])  # Convert 'R' to 82
+
+            if "STA?" in cmd:
+                if len(raw) == 0:
+                    raise Exception("No data received")
+                
+                status_byte = raw[-1] # Extract last byte
+                status_bit = (status_byte >> 3) & 0x01 # mask status bit with 1
+                print(f"byte: {status_byte} bit: {status_bit}")
+                return str(status_bit)
+
             else:
-                raise ValueError("No valid response received")
+                raw = raw.strip('#').strip("\n\r")
+                return raw
 
     async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):
         """
@@ -537,8 +541,9 @@ class StageControl(MotorHAL):
                     print(f"STA?: {response}")
                     status = int(response)
                     print(status)
-                    if (status >> 3) & 1:  # Stopped
-                        break
+                    # if (status >> 3) & 1:  # Stopped
+                    #     break
+                    if status & 1: break
                     time.sleep(0.1)
                 
                 # Set zero point

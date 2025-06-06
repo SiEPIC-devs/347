@@ -34,6 +34,8 @@ async def demo():
     z = AxisType.Z
     fr = AxisType.ROTATION_FIBER
     cp = AxisType.ROTATION_CHIP
+    
+    print(f"x: {x}") # sanity check
 
     print(">>> Initializing X …")
     ok = await mgr.initialize(axes=[x])
