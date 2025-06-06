@@ -398,6 +398,8 @@ class StageControl(MotorHAL):
         def _get_pos():
             try:
                 response = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
+
+                print(f"RESP: {response}\n") # Debug
                 
                 # Parse response: "position,encoder_position"
                 parts = response.split(',')

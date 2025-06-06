@@ -13,7 +13,7 @@ def print_event(event: MotorEvent):
     axis = event.axis.name
     evtype = event.event_type.name
     details = event.data
-    print(f"[{timestamp:.3f}] {axis} -> {evtype} -> {details}")
+    print(f"<<< [{timestamp:.3f}] {axis} -> {evtype} -> {details} \n")
 
 async def demo():
     # 2) Build a config & the manager
@@ -39,6 +39,8 @@ async def demo():
         await mgr.disconnect_all()
     print(f"Initialized X: {ok}")
 
+    await asyncio.sleep(3)
+
     # Register our print_event handler
     # mgr.motors[x].add_event_callback(print_event) # todo: Hmm weird syntax way of doing it
 
@@ -46,17 +48,23 @@ async def demo():
     print("\n>>> Homing X …")
     homed = await mgr.home_axis(x, direction=0)
     print("Home X returned:", homed)
+    
+    await mgr._on_event
+    
+    await asyncio.sleep(3)
 
     # Move X to +100 um (absolute)
     print("\n>>> Moving X to 100 um (absolute) …")
     moved = await mgr.move_single_axis(
         x,
-        position=100.0,
+        position=1000.0,
         relative=False,
         velocity=None,         # use default from config
         wait_for_completion=True
     )
     print("move_single_axis returned:", moved)
+
+    await asyncio.sleep(3)
 
     # Now start a relative move (e.g.100 um), then stop halfway
     print("\n>>> Starting a 100 um relative move on X …")
