@@ -171,7 +171,7 @@ class StageControl(MotorHAL):
 
                 if len(raw) == 0:
                     print("No data received, using last known raw data")
-                    print(self._palceholder)
+                    print(self._placeholder)
                     status_byte = self._placeholder[1]
                     status_bit = (status_byte >> 3) & 1
                     print(f"byte: {status_byte} bit: {status_bit}")
