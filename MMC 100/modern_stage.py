@@ -524,7 +524,7 @@ class StageControl(MotorHAL):
                 while True:
                     print("Wait for completion\n")
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
-                    print(response)
+                    print(f"STA?: {response}")
                     status = int(response)
                     print(status)
                     if (status >> 3) & 1:  # Stopped
@@ -541,6 +541,7 @@ class StageControl(MotorHAL):
                 return True
                 
             except Exception as e:
+                print(f"Homing error: {e}\n")
                 self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
                 return False
                 
