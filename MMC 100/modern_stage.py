@@ -96,6 +96,7 @@ class StageControl(MotorHAL):
         self._is_homed = False
         self._move_in_progress = False
         self._target_position = None
+        self._placeholder = ''
     
     async def connect(self):
         """ 
@@ -165,13 +166,21 @@ class StageControl(MotorHAL):
 
             if "STA?" in cmd:
                 raw = self._serial_port.read(20)
+                self._placeholder = raw if len(raw) != 0 else self._placeholder
                 print(f"raw: {raw}")
+
                 if len(raw) == 0:
-                    raise Exception("No data received")
-                status_byte = raw[1] # Extract last byte
-                status_bit = (status_byte >> 3) & 1 # mask status bit with 1
+                    print("No data received, using last known raw data")
+                    status_byte = self._placeholder[1]
+                    status_bit = (status_byte >> 3) & 1
+                    print(f"byte: {status_byte} bit: {status_bit}")
+                    return str(status_bit) # try
+                
+                status_byte = raw[1] # Extract status byte
+                status_bit = (status_byte >> 3) & 1 # mask status bit with 1 (stopped)
                 print(f"byte: {status_byte} bit: {status_bit}")
                 return str(status_bit)
+            
             elif "POS?" in cmd:
                 raw = self._serial_port.read(20)
                 print(f"raw: {raw}")
@@ -185,6 +194,31 @@ class StageControl(MotorHAL):
                 raw = raw.strip('#').strip("\n\r")
                 return raw
 
+    async def _wait_for_home_completion(self, timeout: float = 30.0):
+        """
+        Monitor home completion 
+        """
+        def _home_completion():
+            try:
+                start_time = time.time()
+
+                while time.time() - start_time < timeout:
+                    # Check if motor is still moving
+                    response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
+                    status_int = int(response)
+
+                    # Status bit is 1 if stopped
+                    if status_int:
+                        print("Motor has finished homing")
+                        return True
+                    
+                    time.sleep(0.1)
+            
+            except Exception as e:
+                self._move_in_progress = False
+                self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
+                return False
+            
     async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):
         """
         Monitor move completion and emit MOVE_COMPLETED event when done
@@ -552,10 +586,17 @@ class StageControl(MotorHAL):
                     time.sleep(0.3)
                 
                 # Set zero point
-                print("Set zero point")
-                self._send_command(f"{self.AXIS_MAP[self.axis]}ZRO")
-                self._is_homed = True # todo: check if homed is for specific axis, check super config may be fine
-                self._last_position = 0.0  # Reset position tracking
+                if direction == 0:
+                    print("Set zero point")
+                    self._send_command(f"{self.AXIS_MAP[self.axis]}ZRO")
+                    self._is_homed = True # todo: check if homed is for specific axis, check super config may be fine
+                    self._last_position = 0.0   # Reset position tracking
+                else:
+                    # For homing purposes, it should always be the negative limit
+                    print("Set positive limit")
+                    pos = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
+                    self._last_position = float(pos[0]) * 1000.0 # mm to um
+                    self._is_homed = True
 
                 self._emit_event(MotorEventType.HOMED, {'direction': direction})
                 return True
@@ -597,7 +638,7 @@ class StageControl(MotorHAL):
                 pos_resp = self._query_command(f"{axis_num}POS?")
 
                 # pos_resp looks like "X.XXXXXX,..." - take the first comma-separated value
-                neg_mm = float(pos_resp.split(",")[0])
+                neg_mm = float(pos_resp[0])
                 neg_um = neg_mm * 1000.0 # convert
 
                 # Zero neg limit, becomes 0 mm
