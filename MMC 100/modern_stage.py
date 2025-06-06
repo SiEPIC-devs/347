@@ -168,13 +168,7 @@ class StageControl(MotorHAL):
                 print(f"raw: {raw}")
                 if len(raw) == 0:
                     raise Exception("No data received")
-                byte_array = [raw[i] for i in len(raw)]
-                byte_arr = ""
-                for n in byte_array:
-                    rn = bin(n)[2:]
-                    byte_arr += rn
-                print(byte_arr)
-                status_byte = raw[0] # Extract last byte
+                status_byte = raw[1] # Extract last byte
                 status_bit = (status_byte >> 3) & 1 # mask status bit with 1
                 print(f"byte: {status_byte} bit: {status_bit}")
                 return str(status_bit)
@@ -186,7 +180,6 @@ class StageControl(MotorHAL):
                 raw = raw.strip('#').strip("\n\r")
                 raw = raw.split(',')
                 return raw
-
             
             else:
                 raw = raw.strip('#').strip("\n\r")
