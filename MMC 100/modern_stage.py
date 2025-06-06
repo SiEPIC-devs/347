@@ -162,6 +162,7 @@ class StageControl(MotorHAL):
             if not self._serial_port or not self._serial_port.is_open:
                 raise ConnectionError("Serial port not connected")
                 
+            print(f"Querying {cmd}")
             self._serial_port.write((cmd + "\r\n").encode('ascii'))            
 
             if "STA?" in cmd:
@@ -195,30 +196,30 @@ class StageControl(MotorHAL):
                 raw = raw.strip('#').strip("\n\r")
                 return raw
 
-    async def _wait_for_home_completion(self, timeout: float = 30.0):
-        """
-        Monitor home completion 
-        """
-        def _home_completion():
-            try:
-                start_time = time.time()
+    # async def _wait_for_home_completion(self, timeout: float = 30.0):
+    #     """
+    #     Monitor home completion 
+    #     """
+    #     def _home_completion():
+    #         try:
+    #             start_time = time.time()
 
-                while time.time() - start_time < timeout:
-                    # Check if motor is still moving
-                    response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
-                    status_int = int(response)
+    #             while time.time() - start_time < timeout:
+    #                 # Check if motor is still moving
+    #                 response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
+    #                 status_int = int(response)
 
-                    # Status bit is 1 if stopped
-                    if status_int:
-                        print("Motor has finished homing")
-                        return True
+    #                 # Status bit is 1 if stopped
+    #                 if status_int:
+    #                     print("Motor has finished homing")
+    #                     return True
                     
-                    time.sleep(0.1)
+    #                 time.sleep(0.1)
             
-            except Exception as e:
-                self._move_in_progress = False
-                self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
-                return False
+    #         except Exception as e:
+    #             self._move_in_progress = False
+    #             self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
+    #             return False
             
     async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):
         """

@@ -52,15 +52,15 @@ async def demo():
     # Home X (positive limit)
     print("\n>>> Homing X pos…")
     homed = await mgr.home_axis(x, direction=1)
-    done = await mgr.wait_for_home_completion(x)
-    print(f"Home X returned: {homed} status: {done}")
+    # done = await mgr.wait_for_home_completion(x)
+    print(f"Home X returned: {homed}")
     
 
     # Home X (negative limit)
     print("\n>>> Homing X neg…")
     homed = await mgr.home_axis(x, direction=0)
-    done = await mgr.wait_for_home_completion(x)
-    print(f"Home X returned: {homed} status: {done}")
+    # done = await mgr.wait_for_home_completion(x)
+    print(f"Home X returned: {homed}")
     
 
     # # Move X to 0 um (absolute)
