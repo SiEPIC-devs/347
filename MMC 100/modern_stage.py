@@ -145,7 +145,7 @@ class StageControl(MotorHAL):
                 raise ConnectionError("Serial port not connected")
 
             print(f"cmd: {cmd}")
-            self._serial_port.write((cmd + "\r\n").encode('ascii'))
+            self._serial_port.write((cmd + "\r").encode('ascii')) # maybe
             time.sleep(0.05)  # Small delay for command processing
             
             # Read response if available
@@ -154,7 +154,7 @@ class StageControl(MotorHAL):
                 response = self._serial_port.read_until(b'\r\n').decode('ascii').strip()
                 
             return response
-        
+     
     def _query_command(self, cmd : str) -> str:
         """
         Send query command and wait for response
@@ -162,41 +162,41 @@ class StageControl(MotorHAL):
         with self._serial_lock:
             if not self._serial_port or not self._serial_port.is_open:
                 raise ConnectionError("Serial port not connected")
-                
-            print(f"Querying {cmd}")
-            self._serial_port.write((cmd + "\r\n").encode('ascii'))            
+            
+            # Clear everything first
+            self._serial_port.reset_input_buffer()
+            self._serial_port.reset_output_buffer()
+
+            # print(f"Querying {cmd}")
+            self._serial_port.write((cmd + "\r").encode('ascii'))   
+            time.sleep(0.05)
+            self._serial_port.flush()          
             time.sleep(0.05)  # Small delay for command processing
 
             if "STA?" in cmd:
-                raw = self._serial_port.read(20)
-                self._placeholder = raw if len(raw) != 0 else self._placeholder
-                # print(f"raw: {raw}")
-
-                if len(raw) == 0:
-                    # print("No data received, using last known raw data")
-                    # print(self._placeholder)
-                    status_byte = self._placeholder[1]
-                    status_bit = (status_byte >> 3) & 1
-                    # print(f"byte: {status_byte} bit: {status_bit}")
-                    return str(status_bit) # try
+                raw = self._serial_port.read_until(b"\n\r")
+                text = raw.decode('ascii').strip()
                 
-                status_byte = raw[1] # Extract status byte
-                status_bit = (status_byte >> 3) & 1 # mask status bit with 1 (stopped)
-                print(f"byte: {status_byte} bit: {status_bit}")
+                if len(text) == 0:
+                    return str(0)  # Default to moving if no response
+                
+                # Parse status number (remove # prefix)
+                status_number = int(text.strip('#'))
+                status_bit = (status_number >> 3) & 1 # bit 3 is stopped when 1
                 return str(status_bit)
-            
+
             elif "POS?" in cmd:
-                raw = self._serial_port.read(20)
-                print(f"raw: {raw}")
-                if len(raw) == 0:
+                raw = self._serial_port.read_until(b"\n\r")
+                text = raw.decode('ascii').strip()
+                print(f"POS raw: {text}")
+                
+                if len(text) == 0:
                     raise Exception("No data received")
-                raw = raw.strip('#').strip("\n\r")
-                raw = raw.split(',')
-                return raw
-            
-            else:
-                raw = raw.strip('#').strip("\n\r")
-                return raw
+                
+                # Remove # prefix and split
+                clean_text = text.strip('#')
+                values = clean_text.split(',')
+                return values
 
     # async def _wait_for_home_completion(self, timeout: float = 30.0):
     #     """
@@ -240,7 +240,7 @@ class StageControl(MotorHAL):
                     # Check bit 3 (moving[0]/stopped[1])
                     # is_stopped = status_int & 1
                     
-                    if status_int:
+                    if status_int == 1:
                         # Motor has stopped, now check if we're at target position
                         pos_response = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
                         # parts = pos_response.split(',')
@@ -495,7 +495,7 @@ class StageControl(MotorHAL):
                 status_int = int(response)
                 
                 # Check bit 3 (moving[0]/stopped[1])
-                if status_int:
+                if status_int == 1:
                     return MotorState.IDLE
                 
                 return MotorState.MOVING # else
@@ -573,6 +573,7 @@ class StageControl(MotorHAL):
                 self._emit_event(MotorEventType.MOVE_STARTED, {'operation': 'homing'})
                 self._move_in_progress = True # Set move to true
                 self._is_homed = False # Set homed to false
+                start_time = time.time()
 
                 if direction == 0:
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MLN")  # Move to negative limit
@@ -584,8 +585,10 @@ class StageControl(MotorHAL):
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
                     # print(f"STA?: {response}")
                     status = int(response)
-                    if status: break
+                    if status == 1: break
                     time.sleep(0.3)
+                    if abs(time.time() - start_time) > 30.0:
+                        break
                 
                 # Set zero point
                 if direction == 0:
@@ -637,7 +640,7 @@ class StageControl(MotorHAL):
                 while True:
                     response = self._query_command(f"{axis_num}STA?")
                     status = int(response)
-                    if status:  # Stopped
+                    if status == 1:  # Stopped
                         break
                     time.sleep(0.1)
 
@@ -663,7 +666,7 @@ class StageControl(MotorHAL):
                 while True:
                     response = self._query_command(f"{axis_num}STA?")
                     status = int(response)
-                    if status:  # Stopped
+                    if status == 1:  # Stopped
                         break
                     time.sleep(0.1)
 

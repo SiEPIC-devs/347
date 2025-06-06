@@ -77,13 +77,13 @@ async def demo():
     # await asyncio.sleep(1)
  
 
-    # # Ask for X’s current position
-    # print("\n>>> Querying X’s position …")
-    # pos_obj = await mgr.get_position(x)
-    # if pos_obj:
-    #     print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
-    # else:
-    #     print("Could not read X position.")
+    # Ask for X’s current position
+    print("\n>>> Querying X’s position …")
+    pos_obj = await mgr.get_position(x)
+    if pos_obj:
+        print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
+    else:
+        print("Could not read X position.")
 
     # 9) Disconnect everything
     print("\n>>> Disconnecting …")
