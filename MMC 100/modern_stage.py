@@ -163,7 +163,9 @@ class StageControl(MotorHAL):
                 
             self._serial_port.write((cmd + "\r\n").encode('ascii'))
             raw = self._serial_port.read_until(b'\r\n')
+            print(f"raw: {raw}\n")
             response = raw.decode('ascii', errors='ignore').strip() # try
+            print(f"Response: {response}\n")
             return response.strip('#').strip('\r\n')
 
     async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):
@@ -273,7 +275,8 @@ class StageControl(MotorHAL):
                 lo, hi = self._position_limits
                 # if abs(position_mm) >= 1e-6 and abs(position_mm) <= (1000-1e-6):
                 if position > lo and position < hi: 
-                    self._send_command(f"{self.AXIS_MAP[self.axis]}MVA{position_mm:.6f}") 
+                    self._send_command(f"{self.AXIS_MAP[self.axis]}MVA{position_mm:.6f}")
+                    print("<<< cmd sent") 
                 else:
                     raise Exception(f"Distance entered exceeds softlimits, must be within bounds : {lo} < {position} < {hi}")
 

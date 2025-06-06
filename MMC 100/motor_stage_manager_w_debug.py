@@ -135,7 +135,6 @@ class StageManager:
             except Exception as e:
                 print(f"[{event.axis.name}] Error in manager‐level callback: {e}")
 
-
     async def initialize(self, axes):
         """
         Initialize all stage axes
