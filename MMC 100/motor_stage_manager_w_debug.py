@@ -169,6 +169,11 @@ class StageManager:
     @requires_motor
     async def home_axis(self, axis: AxisType, direction: int = 0) -> bool:
         ok = await self._safe_execute(f"home {axis.name}", self.motors[axis].home(direction))
+       
+        # # Wait for home to complete
+        # while self.motors[axis]._move_in_progress:
+        #     await asyncio.sleep(0.1)
+        
         if ok:
             self._last_positions[axis] = 0.0
         return ok

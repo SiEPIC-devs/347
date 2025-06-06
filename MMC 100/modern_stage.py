@@ -534,7 +534,8 @@ class StageControl(MotorHAL):
             try:
                 self._emit_event(MotorEventType.MOVE_STARTED, {'operation': 'homing'})
                 print("Homing begins    \n")
-                
+                self._move_in_progress = True # Set move to true
+
                 if direction == 0:
                     print("Move to pos limit")
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MLN")  # Move to negative limit
@@ -558,7 +559,7 @@ class StageControl(MotorHAL):
                 self._send_command(f"{self.AXIS_MAP[self.axis]}ZRO")
                 self._is_homed = True # todo: check if homed is for specific axis, check super config may be fine
                 self._last_position = 0.0  # Reset position tracking
-
+    
                 self._emit_event(MotorEventType.HOMED, {'direction': direction})
                 return True
                 
