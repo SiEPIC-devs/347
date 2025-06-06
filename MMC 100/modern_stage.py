@@ -171,6 +171,7 @@ class StageControl(MotorHAL):
 
                 if len(raw) == 0:
                     print("No data received, using last known raw data")
+                    print(self._palceholder)
                     status_byte = self._placeholder[1]
                     status_bit = (status_byte >> 3) & 1
                     print(f"byte: {status_byte} bit: {status_bit}")
@@ -568,6 +569,7 @@ class StageControl(MotorHAL):
             try:
                 self._emit_event(MotorEventType.MOVE_STARTED, {'operation': 'homing'})
                 self._move_in_progress = True # Set move to true
+                self._is_homed = False # Set homed to false
 
                 if direction == 0:
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MLN")  # Move to negative limit
@@ -596,12 +598,17 @@ class StageControl(MotorHAL):
                     print("Set positive limit")
                     pos = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
                     self._last_position = float(pos[0]) * 1000.0 # mm to um
+                    print(f"last pos: {self._last_position}")
                     self._is_homed = True
 
                 self._emit_event(MotorEventType.HOMED, {'direction': direction})
                 return True
                 
             except Exception as e:
+                if self._is_homed == True:
+                    print("Exception caught but homing complete")
+                    return True
+                
                 print(f"Homing error: {e}\n")
                 self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
                 return False

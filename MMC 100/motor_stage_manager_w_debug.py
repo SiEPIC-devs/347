@@ -186,6 +186,11 @@ class StageManager:
         return ok
 
     @requires_motor
+    async def wait_for_home_completion(self, axis: AxisType) -> bool:
+        ok = await self._safe_execute(f"home {axis.name} status", self.motors[axis]._wait_for_home_completion())
+        return ok
+    
+    @requires_motor
     async def move_single_axis(self, axis: AxisType, position: float,
                                relative=False, velocity=None,
                                wait_for_completion=True) -> bool:
