@@ -171,11 +171,11 @@ class StageControl(MotorHAL):
                 # print(f"raw: {raw}")
 
                 if len(raw) == 0:
-                    print("No data received, using last known raw data")
+                    # print("No data received, using last known raw data")
                     # print(self._placeholder)
                     status_byte = self._placeholder[1]
                     status_bit = (status_byte >> 3) & 1
-                    print(f"byte: {status_byte} bit: {status_bit}")
+                    # print(f"byte: {status_byte} bit: {status_bit}")
                     return str(status_bit) # try
                 
                 status_byte = raw[1] # Extract status byte
@@ -190,7 +190,7 @@ class StageControl(MotorHAL):
                 while len(raw) == 0:
                     raw = self._serial_port.read(20)
                     count += 1
-                    if count > 10:
+                    if count > 10000:
                         raise Exception("No data received")
                 raw = raw.strip('#').strip("\n\r")
                 raw = raw.split(',')
