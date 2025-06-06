@@ -404,7 +404,7 @@ class StageControl(MotorHAL):
                 # Parse response: "position,encoder_position"
                 parts = response.split(',')
                 theoretical_mm = float(parts[0])
-                actual_mm = float(parts[0])  # Use same for now
+                actual_mm = float(parts[1])  
                 
                 # Convert mm to um
                 theoretical_um = theoretical_mm * 1000
@@ -522,9 +522,11 @@ class StageControl(MotorHAL):
                 
                 # Wait for completion
                 while True:
-                    print("Wait for completion")
+                    print("Wait for completion\n")
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
+                    print(response)
                     status = int(response)
+                    print(status)
                     if (status >> 3) & 1:  # Stopped
                         break
                     time.sleep(0.1)

@@ -49,36 +49,35 @@ async def demo():
     homed = await mgr.home_axis(x, direction=0)
     print("Home X returned:", homed)
     
-    await mgr._on_event
     
     await asyncio.sleep(3)
 
-    # Move X to +100 um (absolute)
-    print("\n>>> Moving X to 100 um (absolute) …")
-    moved = await mgr.move_single_axis(
-        x,
-        position=1000.0,
-        relative=False,
-        velocity=None,         # use default from config
-        wait_for_completion=True
-    )
-    print("move_single_axis returned:", moved)
+    # # Move X to +100 um (absolute)
+    # print("\n>>> Moving X to 100 um (absolute) …")
+    # moved = await mgr.move_single_axis(
+    #     x,
+    #     position=1000.0,
+    #     relative=False,
+    #     velocity=None,         # use default from config
+    #     wait_for_completion=True
+    # )
+    # print("move_single_axis returned:", moved)
 
-    await asyncio.sleep(3)
+    # await asyncio.sleep(3)
 
-    # Now start a relative move (e.g.100 um), then stop halfway
-    print("\n>>> Starting a 100 um relative move on X …")
-    long_move = asyncio.create_task(
-        mgr.move_single_axis(x, position=100.0, relative=True, wait_for_completion=True)
-    )
-    # Wait 0.2 s, then stop
-    await asyncio.sleep(0.2)
-    print(">>> Calling stop_axis(X) …")
-    stopped = await mgr.stop_axis(x)
-    print("stop_axis returned:", stopped)
+    # # Now start a relative move (e.g.100 um), then stop halfway
+    # print("\n>>> Starting a 100 um relative move on X …")
+    # long_move = asyncio.create_task(
+    #     mgr.move_single_axis(x, position=100.0, relative=True, wait_for_completion=True)
+    # )
+    # # Wait 0.2 s, then stop
+    # await asyncio.sleep(0.2)
+    # print(">>> Calling stop_axis(X) …")
+    # stopped = await mgr.stop_axis(x)
+    # print("stop_axis returned:", stopped)
 
-    # Wait for the long move task to finish/cleanup
-    await long_move
+    # # Wait for the long move task to finish/cleanup
+    # await long_move
 
     # Ask for X’s current position
     print("\n>>> Querying X’s position …")
