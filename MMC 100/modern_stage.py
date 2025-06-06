@@ -161,19 +161,21 @@ class StageControl(MotorHAL):
             if not self._serial_port or not self._serial_port.is_open:
                 raise ConnectionError("Serial port not connected")
                 
-            self._serial_port.write((cmd + "\r\n").encode('ascii'))
-            raw = self._serial_port.read(20)
-            print(f"raw: {raw}")
+            self._serial_port.write((cmd + "\r\n").encode('ascii'))            
 
             if "STA?" in cmd:
+                raw = self._serial_port.read(1)
+                print(f"raw: {raw}")
                 if len(raw) == 0:
                     raise Exception("No data received")
                 
                 status_byte = raw[0] # Extract last byte
-                status_bit = (status_byte >> 3) & 0x01 # mask status bit with 1
+                status_bit = (status_byte >> 3) & 1 # mask status bit with 1
                 print(f"byte: {status_byte} bit: {status_bit}")
                 return str(status_bit)
             elif "POS?" in cmd:
+                raw = self._serial_port.read(20)
+                print(f"raw: {raw}")
                 if len(raw) == 0:
                     raise Exception("No data received")
                 raw = raw.strip('#').strip("\n\r")
