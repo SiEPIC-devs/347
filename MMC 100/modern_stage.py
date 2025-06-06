@@ -162,7 +162,7 @@ class StageControl(MotorHAL):
                 raise ConnectionError("Serial port not connected")
                 
             self._serial_port.write((cmd + "\r\n").encode('ascii'))
-            raw = self._serial_port.read(1) # read 1 byte
+            raw = self._serial_port.read(10) # read 10 byte
             print(f"raw: {raw}\n")
             response = raw.decode('ascii', errors='ignore').strip() # try
             print(f"Response: {response}\n")
