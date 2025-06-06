@@ -25,6 +25,9 @@ async def demo():
     )
     mgr = StageManager(cfg)
 
+    # Add event handler
+    mgr.add_event_callback(print_event)
+
     # Initialize just the X axis
     x = AxisType.X
     y = AxisType.Y
@@ -45,15 +48,15 @@ async def demo():
     # mgr.motors[x].add_event_callback(print_event) # todo: Hmm weird syntax way of doing it
 
     # Home X (positive limit)
-    print("\n>>> Homing X …")
+    print("\n>>> Homing X pos…")
     homed = await mgr.home_axis(x, direction=1)
     print("Home X returned:", homed)
 
     await asyncio.sleep(1)
 
-    # Home X (positive limit)
-    print("\n>>> Homing X …")
-    homed = await mgr.home_axis(x, direction=1)
+    # Home X (negative limit)
+    print("\n>>> Homing X neg…")
+    homed = await mgr.home_axis(x, direction=0)
     print("Home X returned:", homed)
     
     await asyncio.sleep(3)
@@ -71,7 +74,7 @@ async def demo():
     print("move_single_axis returned:", moved)
 
     await asyncio.sleep(1)
-    
+
     # Ask for X’s current position
     print("\n>>> Querying X’s position …")
     pos_obj = await mgr.get_position(x)

@@ -162,7 +162,8 @@ class StageControl(MotorHAL):
                 raise ConnectionError("Serial port not connected")
                 
             self._serial_port.write((cmd + "\r\n").encode('ascii'))
-            response = self._serial_port.read_until(b'\r\n').decode('ascii')
+            raw = self._serial_port.read_until(b'\r\n')
+            response = raw.decode('ascii', errors='ignore').strip() # try
             return response.strip('#').strip('\r\n')
 
     async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):

@@ -93,7 +93,7 @@ class StageManager:
     def __init__(self, config: StageConfiguration):
         self.config = config
         self.motors: Dict[AxisType, StageControl] = {}
-        self._callbacks: List[Callable[[MotorEvent], None]] = []
+        self._event_callbacks: List[Callable[[MotorEvent], None]] = []
         self._last_positions: Dict[AxisType, float] = {}
 
     # Helper decorator to ensure axis is initialized
@@ -116,6 +116,25 @@ class StageManager:
             logger.error(f"Error {desc}: {e}")
             logger.debug("Traceback:", exc_info=True)
             return default
+
+    # Helper functions for events
+    def add_event_callback(self, callback: Callable[[MotorEvent], None]):
+        """Register callback for motor events."""
+        self._event_callbacks.append(callback)
+    
+    def remove_event_callback(self, callback: Callable[[MotorEvent], None]):
+        """Remove event callback."""
+        if callback in self._event_callbacks:
+            self._event_callbacks.remove(callback)
+
+    def _handle_stage_event(self, event: MotorEvent) -> None:
+        """Internal meth to forward motor event emitted"""
+        for cb in self._event_callbacks:
+            try:
+                cb(event)
+            except Exception as e:
+                print(f"[{event.axis.name}] Error in manager‐level callback: {e}")
+
 
     async def initialize(self, axes):
         """
@@ -144,16 +163,9 @@ class StageManager:
             if ok:
                 self.motors[axis] = motor
                 self._last_positions[axis] = 0.0
-                motor.add_event_callback(self._on_event)
+                motor.add_event_callback(self._handle_stage_event)
             results[axis] = ok
         return all(results.values())
-
-    def _on_event(self, event: MotorEvent):
-        for cb in self._callbacks:
-            try:
-                cb(event)
-            except Exception:
-                logger.exception("Error in event callback")
 
     @requires_motor
     async def home_axis(self, axis: AxisType, direction: int = 0) -> bool:
