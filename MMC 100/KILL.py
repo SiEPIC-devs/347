@@ -15,7 +15,7 @@ def print_event(event: MotorEvent):
     details = event.data
     print(f"<<< [{timestamp:.3f}] {axis} -> {evtype} -> {details} \n")
 
-async def demo():
+async def stop():
     # 2) Build a config & the manager
     cfg = StageConfiguration(
         com_port="/dev/ttyUSB0",       
@@ -38,47 +38,12 @@ async def demo():
         print(f"init failed")
         await mgr.disconnect_all()
     print(f"Initialized X: {ok}")
-
-    await asyncio.sleep(3)
-
-    # Register our print_event handler
-    # mgr.motors[x].add_event_callback(print_event) # todo: Hmm weird syntax way of doing it
-
-    # Home X (positive limit)
-    print("\n>>> Homing X …")
-    homed = await mgr.home_axis(x, direction=1)
-    print("Home X returned:", homed)
-
-    await asyncio.sleep(1)
-
-    # Home X (positive limit)
-    print("\n>>> Homing X …")
-    homed = await mgr.home_axis(x, direction=1)
-    print("Home X returned:", homed)
     
-    await asyncio.sleep(3)
-    
-
-    # Move X to 0 um (absolute)
-    print("\n>>> Moving X to 0 um (absolute) …")
-    moved = await mgr.move_single_axis(
-        x,
-        position=0.0,
-        relative=False,
-        velocity=None,         # use default from config
-        wait_for_completion=True
-    )
-    print("move_single_axis returned:", moved)
-
-    await asyncio.sleep(1)
-    
-    # Ask for X’s current position
-    print("\n>>> Querying X’s position …")
-    pos_obj = await mgr.get_position(x)
-    if pos_obj:
-        print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
-    else:
-        print("Could not read X position.")
+    # Wait 0.2 s, then stop
+    await asyncio.sleep(0.2)
+    print(">>> Calling emergency_stop() …")
+    stopped = await mgr.emergency_stop()
+    print("emergency stop returned:", stopped)
 
     # 9) Disconnect everything
     print("\n>>> Disconnecting …")
@@ -86,4 +51,4 @@ async def demo():
     print("Done.")
 
 if __name__ == "__main__":
-    asyncio.run(demo())
+    asyncio.run(stop())
