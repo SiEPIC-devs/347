@@ -53,7 +53,7 @@ async def demo():
     print("\n>>> Homing X pos…")
     homed = await mgr.home_axis(x, direction=1)
     print("Home X returned:", homed)
-
+    time.sleep(5)
     await asyncio.sleep(1)
 
     # Home X (negative limit)
@@ -62,7 +62,7 @@ async def demo():
     print("Home X returned:", homed)
     
     await asyncio.sleep(3)
-    
+    time.sleep(5)
 
     # Move X to 0 um (absolute)
     print("\n>>> Moving X to 0 um (absolute) …")
@@ -76,6 +76,7 @@ async def demo():
     print("move_single_axis returned:", moved)
 
     await asyncio.sleep(1)
+    time.sleep(5)
 
     # Ask for X’s current position
     print("\n>>> Querying X’s position …")
