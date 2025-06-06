@@ -53,8 +53,8 @@ async def demo():
     print("\n>>> Homing X pos…")
     homed = await mgr.home_axis(x, direction=1)
     print("Home X returned:", homed)
-    time.sleep(5)
-    await asyncio.sleep(1)
+    
+    await asyncio.sleep(3)
 
     # Home X (negative limit)
     print("\n>>> Homing X neg…")
@@ -62,29 +62,29 @@ async def demo():
     print("Home X returned:", homed)
     
     await asyncio.sleep(3)
-    time.sleep(5)
+ 
 
-    # Move X to 0 um (absolute)
-    print("\n>>> Moving X to 0 um (absolute) …")
-    moved = await mgr.move_single_axis(
-        x,
-        position=0.0,
-        relative=False,
-        velocity=None,         # use default from config
-        wait_for_completion=True
-    )
-    print("move_single_axis returned:", moved)
+    # # Move X to 0 um (absolute)
+    # print("\n>>> Moving X to 0 um (absolute) …")
+    # moved = await mgr.move_single_axis(
+    #     x,
+    #     position=0.0,
+    #     relative=False,
+    #     velocity=None,         # use default from config
+    #     wait_for_completion=True
+    # )
+    # print("move_single_axis returned:", moved)
 
-    await asyncio.sleep(1)
-    time.sleep(5)
+    # await asyncio.sleep(1)
+ 
 
-    # Ask for X’s current position
-    print("\n>>> Querying X’s position …")
-    pos_obj = await mgr.get_position(x)
-    if pos_obj:
-        print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
-    else:
-        print("Could not read X position.")
+    # # Ask for X’s current position
+    # print("\n>>> Querying X’s position …")
+    # pos_obj = await mgr.get_position(x)
+    # if pos_obj:
+    #     print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
+    # else:
+    #     print("Could not read X position.")
 
     # 9) Disconnect everything
     print("\n>>> Disconnecting …")
