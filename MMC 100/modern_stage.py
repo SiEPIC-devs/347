@@ -186,12 +186,8 @@ class StageControl(MotorHAL):
             elif "POS?" in cmd:
                 raw = self._serial_port.read(20)
                 print(f"raw: {raw}")
-                count = 0
-                while len(raw) == 0:
-                    raw = self._serial_port.read(20)
-                    count += 1
-                    if count > 10000:
-                        raise Exception("No data received")
+                if len(raw) == 0:
+                    raise Exception("No data received")
                 raw = raw.strip('#').strip("\n\r")
                 raw = raw.split(',')
                 return raw
@@ -601,9 +597,10 @@ class StageControl(MotorHAL):
                 else:
                     # For homing purposes, it should always be the negative limit
                     print("Set positive limit")
-                    pos = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
-                    self._last_position = float(pos[0]) * 1000.0 # mm to um
-                    print(f"last pos: {self._last_position}")
+                    # pos = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
+                    # self._last_position = float(pos[0]) * 1000.0 # mm to um
+                    self._last_position = 1000 # placeholder number
+                    # print(f"last pos: {self._last_position}")
                     self._is_homed = True
 
                 self._emit_event(MotorEventType.HOMED, {'direction': direction})
