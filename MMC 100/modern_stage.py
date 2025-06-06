@@ -164,11 +164,16 @@ class StageControl(MotorHAL):
             self._serial_port.write((cmd + "\r\n").encode('ascii'))            
 
             if "STA?" in cmd:
-                raw = self._serial_port.read(1)
+                raw = self._serial_port.read(20)
                 print(f"raw: {raw}")
                 if len(raw) == 0:
                     raise Exception("No data received")
-                
+                byte_array = [raw[i] for i in len(raw)]
+                byte_arr = ""
+                for n in byte_array:
+                    rn = bin(n)[2:]
+                    byte_arr += rn
+                print(byte_arr)
                 status_byte = raw[0] # Extract last byte
                 status_bit = (status_byte >> 3) & 1 # mask status bit with 1
                 print(f"byte: {status_byte} bit: {status_bit}")
