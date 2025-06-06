@@ -515,7 +515,7 @@ class StageControl(MotorHAL):
                 print("Homing begins    \n")
                 
                 if direction == 0:
-                    print("Move to negative limit")
+                    print("Move to pos limit")
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MLN")  # Move to negative limit
                 else:
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MLP")  # Move to positive limit

@@ -44,9 +44,9 @@ async def demo():
     # Register our print_event handler
     # mgr.motors[x].add_event_callback(print_event) # todo: Hmm weird syntax way of doing it
 
-    # Home X (negative limit)
+    # Home X (positive limit)
     print("\n>>> Homing X …")
-    homed = await mgr.home_axis(x, direction=0)
+    homed = await mgr.home_axis(x, direction=1)
     print("Home X returned:", homed)
     
     
