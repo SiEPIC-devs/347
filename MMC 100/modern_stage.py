@@ -144,6 +144,7 @@ class StageControl(MotorHAL):
             if not self._serial_port or not self._serial_port.is_open:
                 raise ConnectionError("Serial port not connected")
 
+            print(f"cmd: {cmd}")
             self._serial_port.write((cmd + "\r\n").encode('ascii'))
             time.sleep(0.05)  # Small delay for command processing
             
@@ -164,6 +165,7 @@ class StageControl(MotorHAL):
                 
             print(f"Querying {cmd}")
             self._serial_port.write((cmd + "\r\n").encode('ascii'))            
+            time.sleep(0.05)  # Small delay for command processing
 
             if "STA?" in cmd:
                 raw = self._serial_port.read(20)
@@ -582,9 +584,6 @@ class StageControl(MotorHAL):
                     response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
                     # print(f"STA?: {response}")
                     status = int(response)
-                    # print(status)
-                    # if (status >> 3) & 1:  # Stopped
-                    #     break
                     if status: break
                     time.sleep(0.3)
                 
