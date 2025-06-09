@@ -6,11 +6,12 @@ import subprocess
 import threading
 import os
 import time
+import signal
 
 # ────────── Configuration ──────────
 BASE_DIR = pathlib.Path(__file__).resolve().parent
 PY = sys.executable
-LOG_FILE = BASE_DIR / "log.txt"   # Change to BASE_DIR.parent / "log.txt" to write one level up
+LOG_FILE = BASE_DIR / "log.txt"  # Change to BASE_DIR.parent / "log.txt" to log one level up
 # ───────────────────────────────────
 
 def is_target(p: pathlib.Path) -> bool:
@@ -18,21 +19,35 @@ def is_target(p: pathlib.Path) -> bool:
     s = p.stem.lower()
     return s.endswith("gui") or s.endswith("setup") or s.endswith("init")
 
-# Aggregate log file (line-buffered: write to disk immediately after each line)
+# Aggregate log file (line-buffered)
 log_fh = open(LOG_FILE, "w", buffering=1, encoding="utf-8")
+
+# Track subprocesses globally
+processes = []
 
 def start_gui(path: pathlib.Path):
     """Thread target: start a GUI subprocess and wait for it to exit"""
     proc = subprocess.Popen(
         [PY, str(path)],
-        cwd=path.parent,                     # Ensure correct resource path
+        cwd=path.parent,
         stdout=log_fh,
         stderr=subprocess.STDOUT,
         env={**os.environ, "REM_MULTI_INST": "1"}
     )
+    processes.append(proc)
     print(f"▶ {path.name} started (pid={proc.pid})")
     proc.wait()
     print(f"⏹ {path.name} exited (rc={proc.returncode})")
+
+def terminate_all():
+    """Terminate all started subprocesses"""
+    print("\n⏹ Terminating all subprocesses...")
+    for proc in processes:
+        try:
+            proc.terminate()
+            print(f"✔ Terminated PID {proc.pid}")
+        except Exception as e:
+            print(f"⚠️ Failed to terminate PID {proc.pid}: {e}")
 
 def main():
     targets = sorted(p for p in BASE_DIR.rglob("*.py") if is_target(p))
@@ -43,17 +58,18 @@ def main():
 
     threads = []
     for mod in targets:
-        th = threading.Thread(target=start_gui, args=(mod,), daemon=True)
+        th = threading.Thread(target=start_gui, args=(mod,))
         th.start()
         threads.append(th)
-        time.sleep(0.3)  # Slight delay to reduce initial IO/memory peak
+        time.sleep(0.3)
 
     print("All GUIs started. Press Ctrl‑C to exit.")
+
     try:
         for th in threads:
-            th.join()  # Wait for all GUI threads to finish
+            th.join()
     except KeyboardInterrupt:
-        print("\n⏹ Ctrl‑C received, exiting main process. All subprocesses will terminate automatically.")
+        terminate_all()
 
 if __name__ == "__main__":
     main()
