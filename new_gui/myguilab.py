@@ -3,7 +3,8 @@ from remi import start, App
 import os
 
 class StyledContainer(Container):
-    def __init__(self, variable_name, left, top, width=650, height=650, border=False, bg_color=False, position="absolute", percent=False, container=None):
+    def __init__(self, variable_name, left, top, width=650, height=650, border=False, bg_color=False,
+                 position="absolute", percent=False, overflow=False, container=None, line="1.5px solid #888"):
         super().__init__()
         self.css_position = f"{position}"
         self.css_left = f"{left}px"
@@ -16,10 +17,20 @@ class StyledContainer(Container):
             self.css_height = f"{height}px"
         self.variable_name = variable_name
         if border == True:
-            self.style["border"] = "2px solid #888"
+            self.style["border"] = f"{line}"
             self.style["border-radius"] = "4px"
         if bg_color == True:
             self.style["background-color"] = "grey"
+        if overflow:
+            self.style.update({
+                "overflow": "auto",
+                "overflow-x": "auto",
+                "overflow-y": "auto",
+                "max-height": "320px",
+                "scrollbar-width": "thin",  # Firefox
+                "border-radius": "4px",
+                "padding-right": "4px"
+            })
         if container:
             self.container = container
             self.container.append(self, self.variable_name)
@@ -85,11 +96,12 @@ class StyledLabel(Label):
         width/height/font_size/color/align: optional styling shortcuts
     """
     def __init__(self, text, variable_name, left, top,
-                 width=150, height=20, font_size=100, color="#444", align="left", position="absolute", percent=False, bold=False, flex=False, container=None):
+                 width=150, height=20, font_size=100, color="#444", align="left", position="absolute", percent=False,
+                 bold=False, flex=False, justify_content = "center", on_line=False, border=False, container=None):
         super().__init__(text)
         self.css_position = f"{position}"
-        self.css_left  = f"{left}px"
-        self.css_top   = f"{top}px"
+        self.css_left = f"{left}px"
+        self.css_top = f"{top}px"
         if percent:
             self.css_width = f"{width}%"
             self.css_height = f"{height}%"
@@ -101,14 +113,21 @@ class StyledLabel(Label):
         if flex:
             self.style.update({
               "display": "flex",
-               "justify-content": "right",  # 水平居中
-               "align-items": "center"  # 垂直居中
-        })
+               "justify-content": f"{justify_content}",
+               "align-items": "center"
+            })
         else:
             self.css_text_align = align
         self.style["color"] = color
         if bold:
             self.style["font-weight"] = "bold"
+        if on_line:
+            self.style.update({
+                "background-color": "white"
+            })
+        if border == True:
+            self.style["border"] = "1.5px solid #888"
+            self.style["border-radius"] = "4px"
         if container:
             self.container = container
             self.container.append(self, self.variable_name)
@@ -264,7 +283,7 @@ class StyledCheckBox(CheckBox):
     def __init__(self, variable_name, left, top, width=30, height=30, position="absolute", percent=False, container=None):
         super().__init__()
         self.css_left = f"{left}px"
-        self.css_margin = "0px"
+        self.css_margin = "5px"
         self.css_position = f"{position}"
         self.css_top = f"{top}px"
         if percent:
@@ -274,7 +293,72 @@ class StyledCheckBox(CheckBox):
             self.css_width = f"{width}px"
             self.css_height = f"{height}px"
         self.variable_name = variable_name
-        self.css_align_items = "left"
+        #self.css_align_items = "right"
+
         if container:
             self.container = container
             self.container.append(self, self.variable_name)
+
+class StyledTextInput(TextInput):
+    def __init__(self, variable_name, left, top, width=150, height=30, text="",
+                 position="absolute", percent=False, container=None):
+        super().__init__()
+        self.css_position = position
+        self.css_left = f"{left}px"
+        self.css_top = f"{top}px"
+        self.set_text(f"{text}")
+        if percent:
+            self.css_width = f"{width}%"
+            self.css_height = f"{height}%"
+        else:
+            self.css_width = f"{width}px"
+            self.css_height = f"{height}px"
+        self.variable_name = variable_name
+        self.style.update({
+            "padding": "0 8px",
+            "border": "1px solid #aaa",
+            "border-radius": "4px",
+            "box-shadow": "inset 0 1px 3px rgba(0,0,0,0.1)",
+            "background-color": "#ffffff",
+            "font-size": "15px",
+            "color": "#333",
+            "text-align": "left",
+            "line-height": f"{height}px",
+            "overflow": "hidden"
+        })
+        self.style["text-align"] = "center"
+        self.style["display"] = "flex"
+        self.style["align-items"] = "center"
+        self.style["justify-content"] = "center"
+        if container:
+            container.append(self, self.variable_name)
+
+class StyledImageBox(Image):
+    def __init__(self, image_path, variable_name, left, top,
+                 width=400, height=300, position="absolute", percent=False, container=None):
+        super().__init__(image_path, width=width, height=height)
+        self.css_position = position
+        self.css_left = f"{left}px"
+        self.css_top = f"{top}px"
+
+        if percent:
+            self.css_width = f"{width}%"
+            self.css_height = f"{height}%"
+        else:
+            self.css_width = f"{width}px"
+            self.css_height = f"{height}px"
+
+        self.variable_name = variable_name
+
+        """self.style.update({
+            "border": "2px solid #444",
+            "border-radius": "6px",
+            "box-shadow": "0 0 6px rgba(0,0,0,0.3)",
+            "background-color": "#f8f8f8",
+            "padding": "2px",
+        })"""
+
+        if container:
+            self.container = container
+            self.container.append(self, self.variable_name)
+

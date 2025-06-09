@@ -1,7 +1,8 @@
 from remi.gui import *
+from myguilab import *
 from remi import start, App
 import os
-from myguilab import StyledContainer, StyledButton, StyledLabel, StyledDropDown, Terminal
+
 
 class starts(App):
     def __init__(self, *args, **kwargs):
@@ -19,18 +20,18 @@ class starts(App):
 
         starts_container = StyledContainer(variable_name="starts_container", left=0, top=0)
 
-        for idx, key in enumerate(('user', 'mode')):
-            StyledLabel(container=starts_container, text={'user': 'User:', 'mode': 'Operating Mode:'}[key], variable_name=f"label_{key}",
-                                     left=100, top=105 + idx*40, width=150, height=20, font_size=100, color='#444', align='right')
-            StyledDropDown(container=starts_container, text={'user': ['User A', 'User B', 'User C'], 'mode': ['TE mode', 'TM mode']}[key],
+        for idx, key in enumerate(("user", "mode")):
+            StyledLabel(container=starts_container, text={"user": "User:", "mode": "Operating Mode:"}[key], variable_name=f"label_{key}",
+                                     left=100, top=105 + idx*40, width=150, height=20, font_size=100, color="#444", align="right")
+            StyledDropDown(container=starts_container, text={"user": ["User A", "User B", "User C"], "mode": ["TE mode", "TM mode"]}[key],
                                 variable_name=f"set_{key}", left=260, top=100 + idx*40, width=220, height=30)
 
         StyledLabel(container=starts_container, text="Welcome to 347 Probe Stage", variable_name="label_configuration",
                                  left=180, top=20, width=300, height=20, font_size=150, color="#222", align="left")
         StyledButton(container=starts_container, text="Edit", variable_name="edit",
-                            left=260, top=180, normal_color='#007BFF', press_color='#0056B3')
-        StyledButton(container=starts_container, text="Remove", variable_name='remove',
-                              left=380, top=180, normal_color='#dc3545', press_color='#c82333')
+                            left=260, top=180, normal_color="#007BFF", press_color="#0056B3")
+        StyledButton(container=starts_container, text="Remove", variable_name="remove",
+                              left=380, top=180, normal_color="#dc3545", press_color="#c82333")
         terminal_container = StyledContainer(container=starts_container, variable_name="terminal_container",
                                              left=0, top=500, height=150, width=650, bg_color=True)
         self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
@@ -45,17 +46,17 @@ class starts(App):
 
 if __name__ == "__main__":
     configuration = {
-        'config_project_name': 'starts',
-        'config_address': '0.0.0.0',
-        'config_port': 9000,
-        'config_multiple_instance': False,
-        'config_enable_file_cache': False,
-        'config_start_browser': True,
-        'config_resourcepath': '"./res/"'
+        "config_project_name": "starts",
+        "config_address": "0.0.0.0",
+        "config_port": 9000,
+        "config_multiple_instance": False,
+        "config_enable_file_cache": False,
+        "config_start_browser": False,
+        "config_resourcepath": "./res/"
     }
     start(starts,
-          address=configuration['config_address'],
-          port=configuration['config_port'],
-          multiple_instance=configuration['config_multiple_instance'],
-          enable_file_cache=configuration['config_enable_file_cache'],
-          start_browser=configuration['config_start_browser'])
+          address=configuration["config_address"],
+          port=configuration["config_port"],
+          multiple_instance=configuration["config_multiple_instance"],
+          enable_file_cache=configuration["config_enable_file_cache"],
+          start_browser=configuration["config_start_browser"])

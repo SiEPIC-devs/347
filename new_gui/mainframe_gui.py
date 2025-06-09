@@ -4,12 +4,13 @@
 # Embedded file name: /home/pi/Desktop/new GUI/main_gui.py
 # Compiled at: 2023-02-14 23:59:31
 # Size of source mod 2**32: 11801 bytes
+from myguilab import *
 from remi.gui import *
 from remi import start, App
 import threading
 import webview
 import time
-from myguilab import StyledContainer, StyledButton, StyledLabel, StyledDropDown, Terminal
+
 
 class NIR_Measurment_System(App):
 
@@ -90,8 +91,8 @@ if __name__ == '__main__':
     webview.create_window(
         'Probe Stage',
         'http://10.2.113.37',
-        width=675,
-        height=775,
+        width=672,
+        height=771,
         resizable=True
     )
 
