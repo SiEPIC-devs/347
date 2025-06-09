@@ -9,6 +9,7 @@ from remi.gui import *
 from remi import start, App
 import threading
 import webview
+import signal
 import time
 
 
@@ -87,6 +88,7 @@ def disable_scroll():
 
 if __name__ == '__main__':
     threading.Thread(target=run_remi, daemon=True).start()
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     webview.create_window(
         'Probe Stage',

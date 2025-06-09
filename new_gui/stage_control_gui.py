@@ -3,27 +3,28 @@ from remi.gui import *
 from remi import start, App
 import threading
 import webview
+import signal
 import os
 
-class control_plane(App):
+class stage_control(App):
     def __init__(self, *args, **kwargs):
         self.timestamp = -1
         if "editing_mode" not in kwargs:
-            super(control_plane, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
+            super(stage_control, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
     def idle(self):
         pass
 
     def main(self):
-        return control_plane.construct_ui(self)
+        return stage_control.construct_ui(self)
 
     @staticmethod
     def construct_ui(self):
-        control_plane_container = StyledContainer(container=None, variable_name="control_plane_container",
+        stage_control_container = StyledContainer(container=None, variable_name="stage_control_container",
                                                   left=0, top=0, height=350, width=650)
 
         # xyz Controller
-        xyz_container = StyledContainer(container=control_plane_container, variable_name="xyz_container",
+        xyz_container = StyledContainer(container=stage_control_container, variable_name="xyz_container",
                                         left=0, top=20, height=300, width=410)
 
         StyledButton(container=xyz_container, text="Stop", variable_name="stop_button", font_size=100,
@@ -71,7 +72,7 @@ class control_plane(App):
         StyledButton(container=xyz_container, text="Zero", variable_name="zero_button", font_size=100,
                      left=310, top=10, width=90, height=30, normal_color="#007BFF", press_color="#0056B3")
         # Limits
-        limits_container=StyledContainer(container=control_plane_container, variable_name="limits_container",
+        limits_container=StyledContainer(container=stage_control_container, variable_name="limits_container",
                                         left=430, top=20, height=90, width=90, border=True)
         StyledLabel(container=limits_container, text="Limits",
                     variable_name="limits_label", left=22.5, top=-12, width=40, height=20,
@@ -83,7 +84,7 @@ class control_plane(App):
                      font_size=100, left=5, top=50, width=80, height=30,
                      normal_color="#007BFF", press_color="#0056B3")
         # Fine Align
-        fine_align_container = StyledContainer(container=control_plane_container, variable_name="fine_align_container",
+        fine_align_container = StyledContainer(container=stage_control_container, variable_name="fine_align_container",
                                            left=540, top=20, height=90, width=90, border=True)
         StyledLabel(container=fine_align_container, text="Fine Align",
                     variable_name="fine_align_label", left=12.5, top=-12, width=65, height=20,
@@ -95,7 +96,7 @@ class control_plane(App):
                      font_size=100, left=5, top=50, width=80, height=30,
                      normal_color="#007BFF", press_color="#0056B3")
         # Raster
-        raster_container = StyledContainer(container=control_plane_container, variable_name="raster_container",
+        raster_container = StyledContainer(container=stage_control_container, variable_name="raster_container",
                                                left=430, top=130, height=90, width=90, border=True)
         StyledLabel(container=raster_container, text="Raster",
                     variable_name="raster_label", left=25, top=-12, width=40, height=20,
@@ -108,7 +109,7 @@ class control_plane(App):
                      normal_color="#007BFF", press_color="#0056B3")
 
         # Move To Device
-        move_container = StyledContainer(container=control_plane_container, variable_name="move_container",
+        move_container = StyledContainer(container=stage_control_container, variable_name="move_container",
                                            left=430, top=240, height=90, width=200, border=True)
         StyledLabel(container=move_container, text="Move To Device",
                     variable_name="move_label", left=50, top=-12, width=100, height=20,
@@ -123,12 +124,12 @@ class control_plane(App):
                      normal_color="#007BFF", press_color="#0056B3")
 
 
-        self.control_plane_container = control_plane_container
-        return control_plane_container
+        self.stage_control_container = stage_control_container
+        return stage_control_container
 
 
 def run_remi():
-    start(control_plane,
+    start(stage_control,
           address='0.0.0.0', port=8000,
           start_browser=False,
           multiple_instance=False)
@@ -144,9 +145,10 @@ def disable_scroll():
 
 if __name__ == '__main__':
     threading.Thread(target=run_remi, daemon=True).start()
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     webview.create_window(
-        'Control Plane',
+        'Stage Control',
         'http://10.2.113.37:8000',
         width=672,
         height=407,

@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
-
 import sys
 import pathlib
 import subprocess
 import threading
 import os
 import time
-import signal
 
 # ────────── Configuration ──────────
 BASE_DIR = pathlib.Path(__file__).resolve().parent
