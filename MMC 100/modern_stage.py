@@ -435,11 +435,11 @@ class StageControl(MotorHAL):
 
     async def emergency_stop(self):
         """
-        Emergency stop all axes
+        Emergency stop axis
         """
         def _estop():
             try:
-                self._send_command("EST")  # Stop all axes
+                self._send_command(f"{self.AXIS_MAP[self.axis]}EST")  # Stop axes
                 self._move_in_progress = False
                 self._target_position = None
                 return True
@@ -448,7 +448,25 @@ class StageControl(MotorHAL):
                 return False
                 
         return await asyncio.get_event_loop().run_in_executor(self._executor, _estop)
+    
+    async def move_xy(self, cmd: str):
+        """
+        Move xy synchronously. Initialization handling should be done at the manager level
         
+        Does not work
+        """
+        def _move_xy():
+            try:
+                # Format is cmd newline 0RUN
+                self._send_command(cmd=cmd)
+                self._send_command("0RUN")
+                self._move_in_progress = True
+                # self._target
+                return True
+            except Exception as e:
+                print(f"Move_xy error: {e}")
+                return False
+
     # Status and Position
     async def get_position(self):
         """
@@ -732,6 +750,7 @@ class StageControl(MotorHAL):
             'last_position': self._last_position,
             'position_tolerance': self._position_tolerance
         }
+    
 
     # Event handling methods
     # def add_event_callback(self, callback: Callable[[MotorEvent], None]):

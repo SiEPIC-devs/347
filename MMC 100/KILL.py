@@ -31,9 +31,10 @@ async def stop():
     z = AxisType.Z
     fr = AxisType.ROTATION_FIBER
     cp = AxisType.ROTATION_CHIP
+    all = [x,y,z,fr,cp]
 
     print(">>> Initializing X …")
-    ok = await mgr.initialize(axes=[x])
+    ok = await mgr.initialize(axes=all)
     if not ok:
         print(f"init failed")
         await mgr.disconnect_all()

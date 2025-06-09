@@ -40,7 +40,7 @@ async def demo():
     print(f"x: {x}") # sanity check
 
     print(">>> Initializing X …")
-    ok = await mgr.initialize(axes=all)
+    ok = await mgr.initialize(axes=[x,y])
     if not ok:
         print(f"init failed")
         await mgr.disconnect_all()
@@ -91,21 +91,21 @@ async def demo():
     # await asyncio.sleep(1)
  
 
-    # Ask for X’s current position
-    print("\n>>> Querying X’s position …")
-    pos_obj = await mgr.get_position(x)
-    if pos_obj:
-        print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
-    else:
-        print("Could not read X position.")
+    # # Ask for X’s current position
+    # print("\n>>> Querying X’s position …")
+    # pos_obj = await mgr.get_position(x)
+    # if pos_obj:
+    #     print(f"X actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
+    # else:
+    #     print("Could not read X position.")
 
-    # Ask for Y’s current position
-    print("\n>>> Querying Y’s position …")
-    pos_obj = await mgr.get_position(y)
-    if pos_obj:
-        print(f"Y actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
-    else:
-        print("Could not read X position.")
+    # # Ask for Y’s current position
+    # print("\n>>> Querying Y’s position …")
+    # pos_obj = await mgr.get_position(y)
+    # if pos_obj:
+    #     print(f"Y actual = {pos_obj.actual:.2f} um (theoretical = {pos_obj.theoretical:.2f} um)")
+    # else:
+    #     print("Could not read X position.")
 
     # Ask for all init axis positions
     pos_obj_all = await mgr.get_all_positions()
@@ -113,6 +113,13 @@ async def demo():
         print(f"posobj : \n {pos_obj_all}")
     else:
         print("Error in all positions")
+
+    # Relative movements does not work
+    # movexy = await mgr.move_xy((500,500))
+    # if movexy:
+    #     print(f"movexy: {movexy}")
+    # else:
+    #     print("Error in movexy")
 
     # 9) Disconnect everything
     print("\n>>> Disconnecting …")

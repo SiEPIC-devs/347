@@ -14,6 +14,19 @@ Made by: Cameron Basara, 5/30/2025
 Stage manager, intended to interface with the GUI to give high level commands to the modern stage
 
 With debug logging
+
+TODO:
+    Test core movement capabilties beyond already done testing
+    Implement config params loading, consider converting dataclass to yaml
+        yaml -> helper functions -> internal storage using dataclasses -> outputs, measurement information
+    * Clean up modern stage ? 
+    Clean up existing code, remove gunk, remove duplicates
+    Change information access points, loading yaml etcs. Physical ways to store information for next use cases. 
+    Implement factories for drivers (may be at a different level)
+    Implement standardized interactions with hal
+    Implement interactions with other hardware devices: lasers, detectors, TECs, Cams
+    Implement interactions with gui
+    Document control flow
 """
 
 # Configure logging
@@ -23,6 +36,8 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+STAGE_LIST = [347] # placeholder
 
 @dataclass
 class StagePosition:
@@ -87,6 +102,17 @@ class StageConfiguration:
     position_tolerance: float = 1.0  # um
     status_poll_interval: float = 0.05  # seconds
     move_timeout: float = 30.0  # seconds
+
+    # Intial position settings
+    init_pos = {
+
+    }
+    x_pos: float # start pt in um PLACEHOLDER 
+    y_pos: float # um
+    z_pos: float # um
+    chip_angle: float 
+    fiber_angle: float = 8.0 # degrees
+
 
 
 class StageManager:
@@ -190,6 +216,32 @@ class StageManager:
         ok = await self._safe_execute(f"home {axis.name} status", self.motors[axis]._wait_for_home_completion())
         return ok
     
+    async def load_params(self) -> bool:
+        """
+        Loads preset params of a stage
+        """
+        # # Check if homed
+        # for motor in self.motors:
+        #     if motor._is_homed:
+        #         pass
+        #     else:
+        #         logger.error(f"Please home all axis")
+        #         return False
+
+        # Intialize params
+        # cfg = self.config
+        # x = self.motors[AxisType.X]
+        # y = self.motors[AxisType.Y]
+        # z = self.motors[AxisType.Z]
+        # fr = self.motors[AxisType.ROTATION_FIBER]
+        # cp = self.motors[AxisType.ROTATION_CHIP]
+        # all = [x,y,z,fr,cp]
+
+        # # Load params
+        # for axis in all:
+        #     task_x = asyncio.create_task(axis, )
+        
+    
     @requires_motor
     async def move_single_axis(self, axis: AxisType, position: float,
                                relative=False, velocity=None,
@@ -219,24 +271,29 @@ class StageManager:
                 self._last_positions[axis] = position
         return ok
 
-    # async def move_multiple_axes(self, cmd):
-    #     results = {}
-    #     tasks = []
-    #     for axis, target in cmd.axes.items():
-    #         if axis not in self.motors:
-    #             results[axis] = False
-    #             continue
-    #         coro = self.move_single_axis(axis, target, cmd.relative, cmd.velocity, True)
-    #         if cmd.coordinated_motion:
-    #             tasks.append((axis, asyncio.create_task(coro)))
-    #         else:
-    #             results[axis] = await coro
+    async def move_xy(self, xy_distance: Tuple[float, float]):
+        """
+        MMC Supports multi-axes movement. Move only xy in tandem for safety. Relative movement
+        
+        Args:
+            xy_distance: (x,y) Distance you want to move in microns 
+        """
+        # Need xy to be initialized
+        if (AxisType.X not in self.motors) or (AxisType.Y not in self.motors):
+            logger.error(f"Axis XY not initialized")
+            return False
+        
+        # Scale
+        x_um, y_um = xy_distance
+        x_mm = x_um / 1000
+        y_mm = y_um / 1000 
 
-    #     if cmd.coordinated_motion:
-    #         for axis, task in tasks:
-    #             results[axis] = await self._safe_execute(f"coordinated {axis.name}", task)
-    #     return results
-
+        # Cmd for sync relative mvmt
+        x_cmd = f"1MSR{x_mm:.6f}"
+        y_cmd = f"2MSR{y_mm:.6f}"
+        cmd = f"{x_cmd};{y_cmd}"
+        
+        return await self._safe_execute(f"moving {xy_distance} synchronously", self.motors[AxisType.X].move_xy(cmd))
     @requires_motor
     async def stop_axis(self, axis):
         return await self._safe_execute(f"stop {axis.name}", self.motors[axis].stop())
@@ -247,8 +304,11 @@ class StageManager:
     async def emergency_stop(self):
         if not self.motors:
             return False
-        motor = next(iter(self.motors.values()))
-        return await self._safe_execute("emergency_stop", motor.emergency_stop())
+        for axis in AxisType:
+            if axis in self.motors:
+                await self._safe_execute(f"emergency_stop axis {self.motors[axis]}", self.motors[axis].emergency_stop())
+        return True
+        
 
     @requires_motor
     async def get_position(self, axis: AxisType) -> Optional[Position]:
@@ -300,6 +360,7 @@ class StageManager:
         self.motors.clear()
         self._last_positions.clear()
 
+    @requires_motor
     async def disconnect(self, axis: AxisType):
         """
         Disconnect a single motor
