@@ -4,6 +4,7 @@
 # Embedded file name: /home/pi/Desktop/new GUI/main_gui.py
 # Compiled at: 2023-02-14 23:59:31
 # Size of source mod 2**32: 11801 bytes
+
 from myguilab import *
 from remi.gui import *
 from remi import start, App
@@ -11,6 +12,18 @@ import threading
 import webview
 import signal
 import time
+import socket
+
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 class NIR_Measurment_System(App):
@@ -27,7 +40,7 @@ class NIR_Measurment_System(App):
 
     @staticmethod
     def construct_ui(self):
-        ip_address = "10.2.113.37"
+        ip_address = get_local_ip()
         main = StyledContainer(variable_name="main", left=0, top=0, height=715, width=650)
         main_tab = TabBox()
         main_tab.attr_editor_newclass = False
@@ -40,6 +53,7 @@ class NIR_Measurment_System(App):
         main_tab.css_top = "0px"
         main_tab.css_width = "100%"
         main_tab.variable_name = "main_tab"
+
         tab_cfg = [
             ("Start", 9000),
             ("Instruments", 9001),
@@ -67,15 +81,13 @@ class NIR_Measurment_System(App):
         self.main = main
         return self.main
 
-    #def onclick_setting(self, emitter):
-      #  js = " var win = window.open('http://127.0.0.1:9999', 'popup','width=365,height=450,resizable=yes,scrollbars=yes');"
-     #   self.execute_javascript(js)
 
 def run_remi():
     start(NIR_Measurment_System,
           address='0.0.0.0', port=80,
           start_browser=False,
           multiple_instance=False)
+
 
 def disable_scroll():
     try:
@@ -86,13 +98,16 @@ def disable_scroll():
     except Exception as e:
         print("JS Wrong", e)
 
+
 if __name__ == '__main__':
+    local_ip = get_local_ip()
+
     threading.Thread(target=run_remi, daemon=True).start()
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     webview.create_window(
         'Probe Stage',
-        'http://10.2.113.37',
+        f'http://{local_ip}',
         width=672,
         height=771,
         resizable=True

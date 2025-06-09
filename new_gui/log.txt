@@ -4,86 +4,77 @@ remi.server      INFO     Started httpserver http://0.0.0.0:80/
 remi.server      INFO     Started httpserver http://0.0.0.0:9002/
 remi.server      INFO     Started httpserver http://0.0.0.0:8000/
 remi.request     INFO     built UI (path=/)
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59266)
+remi.server.ws   INFO     handshake complete
 remi.request     INFO     built UI (path=/)
 remi.request     INFO     built UI (path=/)
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET / HTTP/1.1" 200 -
-remi.request     ERROR    error processing GET request
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 651, in do_GET
-    self._process_all(path)
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 696, in _process_all
-    self.wfile.write(encode_text("<!DOCTYPE html>\n"))
-  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socketserver.py", line 826, in write
-    self._sock.sendall(b)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET / HTTP/1.1" 200 -
-remi.request     ERROR    error processing GET request
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 651, in do_GET
-    self._process_all(path)
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 696, in _process_all
-    self.wfile.write(encode_text("<!DOCTYPE html>\n"))
-  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socketserver.py", line 826, in write
-    self._sock.sendall(b)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET / HTTP/1.1" 200 -
-remi.request     ERROR    error processing GET request
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 651, in do_GET
-    self._process_all(path)
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 696, in _process_all
-    self.wfile.write(encode_text("<!DOCTYPE html>\n"))
-  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socketserver.py", line 826, in write
-    self._sock.sendall(b)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+remi.request     INFO     built UI (path=/)
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET /res:font.woff2 HTTP/1.1" 200 -
 remi.server      INFO     Started httpserver http://0.0.0.0:9000/
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53750)
-remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53751)
-remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET /res:font.woff2 HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:22] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53753)
-remi.server.ws   INFO     handshake complete
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+remi.request     ERROR    error processing GET request
+Traceback (most recent call last):
+  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 651, in do_GET
+    self._process_all(path)
+  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 696, in _process_all
+    self.wfile.write(encode_text("<!DOCTYPE html>\n"))
+  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+remi.request     INFO     built UI (path=/)
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+remi.request     ERROR    error processing GET request
+Traceback (most recent call last):
+  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 651, in do_GET
+    self._process_all(path)
+  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 696, in _process_all
+    self.wfile.write(encode_text("<!DOCTYPE html>\n"))
+  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET / HTTP/1.1" 200 -
+remi.request     ERROR    error processing GET request
+Traceback (most recent call last):
+  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 651, in do_GET
+    self._process_all(path)
+  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 696, in _process_all
+    self.wfile.write(encode_text("<!DOCTYPE html>\n"))
+  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socketserver.py", line 826, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
 remi.server      INFO     Started httpserver http://0.0.0.0:9004/
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET /res:style.css HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59287)
+remi.server.ws   INFO     handshake complete
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59288)
+remi.server.ws   INFO     handshake complete
+10.2.113.37 - - [09/Jun/2025 14:06:38] "GET /res:font.woff2 HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59290)
+remi.server.ws   INFO     handshake complete
+10.2.113.37 - - [09/Jun/2025 14:06:39] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59291)
+remi.server.ws   INFO     handshake complete
 remi.request     INFO     built UI (path=/)
+10.2.113.37 - - [09/Jun/2025 14:06:39] "GET / HTTP/1.1" 200 -
 remi.request     INFO     built UI (path=/)
-10.2.113.37 - - [09/Jun/2025 11:31:23] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:23] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:23] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53767)
+10.2.113.37 - - [09/Jun/2025 14:06:39] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:39] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59299)
 remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:23] "GET /my_res:plot.png HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:23] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53770)
+10.2.113.37 - - [09/Jun/2025 14:06:39] "GET /res:font.woff2 HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:39] "GET /res:style.css HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:39] "GET /my_res:plot.png HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59302)
 remi.server.ws   INFO     handshake complete
-remi.server.ws   ERROR    Error managing incoming websocket message
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 167, in read_next_message
-    head = self.rfile.read(2)
-  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
-    return self._sock.recv_into(b)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-remi.server.ws   ERROR    Error managing incoming websocket message
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 167, in read_next_message
-    head = self.rfile.read(2)
-  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
-    return self._sock.recv_into(b)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:27] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:27] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:27] "GET /res:style.css HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:27] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53778)
-remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:27] "GET /res:font.woff2 HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53780)
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59306)
 remi.server.ws   INFO     handshake complete
 remi.server.ws   ERROR    Error managing incoming websocket message
 Traceback (most recent call last):
@@ -92,6 +83,15 @@ Traceback (most recent call last):
   File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
     return self._sock.recv_into(b)
 ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET /res:style.css HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59311)
+remi.server.ws   INFO     handshake complete
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59312)
+remi.server.ws   INFO     handshake complete
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET /res:font.woff2 HTTP/1.1" 200 -
 remi.server.ws   ERROR    Error managing incoming websocket message
 Traceback (most recent call last):
   File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 167, in read_next_message
@@ -99,15 +99,15 @@ Traceback (most recent call last):
   File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
     return self._sock.recv_into(b)
 ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET /res:style.css HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53785)
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET /res:style.css HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59318)
 remi.server.ws   INFO     handshake complete
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53786)
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59319)
 remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET /res:font.woff2 HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:41] "GET /res:font.woff2 HTTP/1.1" 200 -
 remi.server.ws   ERROR    Error managing incoming websocket message
 Traceback (most recent call last):
   File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 199, in read_next_message
@@ -124,22 +124,15 @@ Traceback (most recent call last):
   File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
     return self._sock.recv_into(b)
 ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET /res:style.css HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53792)
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET /res:style.css HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET /res:style.css HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59325)
 remi.server.ws   INFO     handshake complete
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53793)
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59326)
 remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:56] "GET /res:font.woff2 HTTP/1.1" 200 -
-remi.server.ws   ERROR    Error managing incoming websocket message
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 167, in read_next_message
-    head = self.rfile.read(2)
-  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
-    return self._sock.recv_into(b)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET /res:font.woff2 HTTP/1.1" 200 -
 remi.server.ws   ERROR    Error managing incoming websocket message
 Traceback (most recent call last):
   File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 199, in read_next_message
@@ -149,15 +142,16 @@ Traceback (most recent call last):
   File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 236, in send_message
     self.request.sendall(out)
 ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:57] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:57] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:57] "GET /res:style.css HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:57] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53799)
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET / HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET /res:style.css HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET /res:style.css HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET /my_res:plot.png HTTP/1.1" 200 -
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59333)
 remi.server.ws   INFO     handshake complete
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53800)
+remi.server.ws   INFO     connection established: ('10.2.113.37', 59334)
 remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:57] "GET /res:font.woff2 HTTP/1.1" 200 -
+10.2.113.37 - - [09/Jun/2025 14:06:42] "GET /res:font.woff2 HTTP/1.1" 200 -
 remi.server.ws   ERROR    Error managing incoming websocket message
 Traceback (most recent call last):
   File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 167, in read_next_message
@@ -172,37 +166,10 @@ Traceback (most recent call last):
   File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
     return self._sock.recv_into(b)
 ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:58] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:58] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:58] "GET /res:style.css HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:58] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53806)
-remi.server.ws   INFO     handshake complete
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53807)
-remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:58] "GET /res:font.woff2 HTTP/1.1" 200 -
-remi.server.ws   ERROR    Error managing incoming websocket message
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 167, in read_next_message
-    head = self.rfile.read(2)
-  File "C:\Users\12369\AppData\Local\Programs\Python\Python39\lib\socket.py", line 704, in readinto
-    return self._sock.recv_into(b)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-remi.server.ws   ERROR    Error managing incoming websocket message
-Traceback (most recent call last):
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 199, in read_next_message
-    self.on_message(from_websocket(decoded))
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 272, in on_message
-    self.send_message(_MSG_ACK)
-  File "C:\Users\12369\Desktop\UBC\Silicon\SiEPIC\.venv\lib\site-packages\remi\server.py", line 236, in send_message
-    self.request.sendall(out)
-ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
-10.2.113.37 - - [09/Jun/2025 11:31:59] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:59] "GET / HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:59] "GET /res:style.css HTTP/1.1" 200 -
-10.2.113.37 - - [09/Jun/2025 11:31:59] "GET /res:style.css HTTP/1.1" 200 -
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53813)
-remi.server.ws   INFO     handshake complete
-remi.server.ws   INFO     connection established: ('10.2.113.37', 53814)
-remi.server.ws   INFO     handshake complete
-10.2.113.37 - - [09/Jun/2025 11:31:59] "GET /res:font.woff2 HTTP/1.1" 200 -
+[0609/140649.354:ERROR:ui\gfx\win\window_impl.cc:124] Failed to unregister class Chrome_WidgetWin_0. Error = 1411
+[0609/140649.354:ERROR:ui\gfx\win\window_impl.cc:124] Failed to unregister class Chrome_WidgetWin_0. Error = 1411
+remi.server      INFO     *** signal 2 received.
+remi.server      INFO     *** signal 2 received.
+remi.server      INFO     *** signal 2 received.
+remi.server      INFO     *** signal 2 received.
+remi.server      INFO     *** signal 2 received.
