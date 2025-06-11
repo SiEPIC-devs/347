@@ -7,6 +7,7 @@ import time
 
 from motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
 from modern_stage import StageControl
+from motor_factory import create_driver
 
 """
 Made by: Cameron Basara, 5/30/2025
@@ -64,7 +65,7 @@ class MoveCommand:
     relative: bool = False  # True for relative moves, False for absolute
 
 @dataclass
-class StageConfiguration:
+class StageConfiguration():
     """
     Configuration parameters for the stage, this will later be altered to be passed through the GUI
     """
@@ -112,6 +113,15 @@ class StageConfiguration:
     z_pos: float # um
     chip_angle: float 
     fiber_angle: float = 8.0 # degrees
+
+    # factory config ? 
+    driver_types: Dict[AxisType, str] = field(default_factory=lambda: {
+        AxisType.X: "stage_control", 
+        AxisType.Y: "stage_control",
+        AxisType.Z: "stage_control",
+        AxisType.ROTATION_FIBER: "stage_control",
+        AxisType.ROTATION_CHIP: "stage_control"
+    })
 
 
 
@@ -171,7 +181,10 @@ class StageManager:
         for axis in axes:
             # Retrive config
             cfg = self.config
-            motor = StageControl(
+
+            # Instantiate motors through the the factory
+            driver_key = cfg.driver_types[axis]
+            params = dict(
                 axis=axis,
                 com_port=cfg.com_port,
                 baudrate=cfg.baudrate,
@@ -182,6 +195,7 @@ class StageManager:
                 position_tolerance=cfg.position_tolerance,
                 status_poll_interval=cfg.status_poll_interval
             )
+            motor = create_driver(driver_key, **params)
 
             # Catch exceptions
             ok = await self._safe_execute(f"connect {axis.name}", motor.connect()) # motor connects from abstracted stage driver
@@ -190,7 +204,39 @@ class StageManager:
                 self._last_positions[axis] = 0.0
                 motor.add_event_callback(self._handle_stage_event)
             results[axis] = ok
+            
         return all(results.values())
+    
+    # async def initialize(self, axes):
+    #     """
+    #     Initialize all stage axes
+    #     """
+    #     # Succesful initialization
+    #     results = {}
+
+    #     for axis in axes:
+    #         # Retrive config
+    #         cfg = self.config
+    #         motor = StageControl(
+    #             axis=axis,
+    #             com_port=cfg.com_port,
+    #             baudrate=cfg.baudrate,
+    #             timeout=cfg.timeout,
+    #             velocity=cfg.velocities[axis],
+    #             acceleration=cfg.accelerations[axis],
+    #             position_limits=cfg.position_limits[axis],
+    #             position_tolerance=cfg.position_tolerance,
+    #             status_poll_interval=cfg.status_poll_interval
+    #         )
+
+    #         # Catch exceptions
+    #         ok = await self._safe_execute(f"connect {axis.name}", motor.connect()) # motor connects from abstracted stage driver
+    #         if ok:
+    #             self.motors[axis] = motor
+    #             self._last_positions[axis] = 0.0
+    #             motor.add_event_callback(self._handle_stage_event)
+    #         results[axis] = ok
+    #     return all(results.values())
 
     @requires_motor
     async def home_axis(self, axis: AxisType, direction: int = 0) -> bool:

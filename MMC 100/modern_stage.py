@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
 import serial
 
+
 """
 Made by: Cameron Basara, 5/30/2025
 
@@ -776,3 +777,7 @@ class StageControl(MotorHAL):
     #         except Exception as e:
     #             print(f"Error in event callback: {e}")
 
+from motor_factory import register_driver
+
+# Register 347 motor stage
+register_driver("stage_control", StageControl)
