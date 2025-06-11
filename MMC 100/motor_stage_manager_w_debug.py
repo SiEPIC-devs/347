@@ -104,15 +104,15 @@ class StageConfiguration():
     status_poll_interval: float = 0.05  # seconds
     move_timeout: float = 30.0  # seconds
 
-    # Intial position settings
-    init_pos = {
+    # # Intial position settings
+    # init_pos = {
 
-    }
-    x_pos: float # start pt in um PLACEHOLDER 
-    y_pos: float # um
-    z_pos: float # um
-    chip_angle: float 
-    fiber_angle: float = 8.0 # degrees
+    # }
+    # x_pos: float # start pt in um PLACEHOLDER 
+    # y_pos: float # um
+    # z_pos: float # um
+    # chip_angle: float 
+    # fiber_angle: float = 8.0 # degrees
 
     # factory config ? 
     driver_types: Dict[AxisType, str] = field(default_factory=lambda: {
@@ -204,7 +204,7 @@ class StageManager:
                 self._last_positions[axis] = 0.0
                 motor.add_event_callback(self._handle_stage_event)
             results[axis] = ok
-            
+
         return all(results.values())
     
     # async def initialize(self, axes):

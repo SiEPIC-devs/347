@@ -40,7 +40,7 @@ async def demo():
     print(f"x: {x}") # sanity check
 
     print(">>> Initializing X …")
-    ok = await mgr.initialize(axes=[x,y])
+    ok = await mgr.initialize(axes=all)
     if not ok:
         print(f"init failed")
         await mgr.disconnect_all()
@@ -50,7 +50,7 @@ async def demo():
 
     # Register our print_event handler
     # mgr.motors[x].add_event_callback(print_event) # todo: Hmm weird syntax way of doing it
-    """
+    
     ###    X&Y HOMING SEQUENCE POS TO NEG
     # Home X (positive limit)
     print("\n>>> Homing X pos…")
@@ -75,7 +75,7 @@ async def demo():
     homed = await mgr.home_axis(y, direction=0)
     # done = await mgr.wait_for_home_completion(x)
     print(f"Home X returned: {homed}")
-    """
+    
 
     # # Move X to 0 um (absolute)
     # print("\n>>> Moving X to 0 um (absolute) …")
