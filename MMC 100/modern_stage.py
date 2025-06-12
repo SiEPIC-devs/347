@@ -200,90 +200,6 @@ class StageControl(MotorHAL):
                 clean_text = text.strip('#')
                 values = clean_text.split(',')
                 return values
-            
-    async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):
-        """
-        Monitor move completion and emit MOVE_COMPLETED event when done
-        """
-        def _monitor_completion():
-            try:
-                start_time = time.time()
-                timeout = 30.0  # 30 second timeout for moves
-                
-                while time.time() - start_time < timeout:
-                    # Check if motor is still moving
-                    response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
-                    status_int = int(response)
-                    
-                    # Check bit 3 (moving[0]/stopped[1])
-                    # is_stopped = status_int & 1
-                    
-                    if status_int == 1:
-                        # Motor has stopped, now check if we're at target position
-                        pos_response = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
-                        # parts = pos_response.split(',')
-                        current_position_mm = float(pos_response[0])
-                        current_position_um = current_position_mm * 1000
-                        
-                        # Update our cached position
-                        self._last_position = current_position_um
-                        
-                        # Check if we're within tolerance of target
-                        position_error = abs(current_position_um - target_position)
-                        
-                        if position_error <= self._position_tolerance:
-                            # Move completed successfully
-                            self._move_in_progress = False
-                            self._target_position = None
-                            
-                            self._emit_event(MotorEventType.MOVE_COMPLETED, {
-                                'target_position': target_position,
-                                'actual_position': current_position_um,
-                                'position_error': position_error,
-                                'operation': operation_type,
-                                'success': True
-                            })
-                            return True
-                        else:
-                            # Position error too large - possible issue
-                            self._move_in_progress = False
-                            self._target_position = None
-                            
-                            self._emit_event(MotorEventType.MOVE_COMPLETED, {
-                                'target_position': target_position,
-                                'actual_position': current_position_um,
-                                'position_error': position_error,
-                                'operation': operation_type,
-                                'success': False,
-                                'error': f'Position error {position_error:.2f}um exceeds tolerance {self._position_tolerance}um'
-                            })
-                            return False
-                    
-                    time.sleep(self._status_poll_interval) # Release the GIL
-                
-                # Timeout occurred
-                self._move_in_progress = False
-                self._target_position = None
-                
-                self._emit_event(MotorEventType.ERROR_OCCURRED, {
-                    'error': f'Move timeout after {timeout}s',
-                    'target_position': target_position,
-                    'operation': operation_type
-                })
-                return False
-                
-            except Exception as e:
-                self._move_in_progress = False
-                self._target_position = None
-                
-                self._emit_event(MotorEventType.ERROR_OCCURRED, {
-                    'error': str(e),
-                    'target_position': target_position,
-                    'operation': operation_type
-                })
-                return False
-        
-        return await asyncio.get_event_loop().run_in_executor(self._executor, _monitor_completion)
 
     # MOVEMENT
     async def move_absolute(self, position, velocity=None, wait_for_completion=True):
@@ -354,6 +270,14 @@ class StageControl(MotorHAL):
                 if velocity:
                     self._send_command(f"{self.AXIS_MAP[self.axis]}VA{velocity:.6f}")
                 
+                
+                # Convert um to mm
+                distance_mm = distance * 0.001
+
+                # Safety
+                lo, hi = self._position_limits
+                pos = self._last_position + distance  
+
                 # Event handling
                 self._emit_event(MotorEventType.MOVE_STARTED, {
                     "target_position": pos,
@@ -361,12 +285,6 @@ class StageControl(MotorHAL):
                     "velocity": velocity or self._velocity,
                     "operation": "relative_move"
                 })
-                # Convert um to mm
-                distance_mm = distance * 0.001
-
-                # Safety
-                lo, hi = self._position_limits
-                pos = self._last_position + distance # 
                 if pos >= lo and pos <= hi:  
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MVR{distance_mm:.6f}") 
                     # Wait for movement
@@ -388,6 +306,7 @@ class StageControl(MotorHAL):
                     "velocity": velocity or self._velocity,
                     "operation": "relative_move"
                 })
+
                 return pos
                     
             except Exception as e:
@@ -428,7 +347,7 @@ class StageControl(MotorHAL):
                 
         return await asyncio.get_event_loop().run_in_executor(self._executor, _estop)
     
-    async def move_xy(self, cmd: str):
+    async def move_xy(self, cmd: str, wait_for_completion=True):
         """
         Move xy synchronously. Initialization handling should be done at the manager level
         
@@ -440,6 +359,14 @@ class StageControl(MotorHAL):
                 self._send_command(cmd=cmd)
                 self._send_command("0RUN")
                 self._move_in_progress = True
+
+                if wait_for_completion:
+                    while True:
+                            response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
+                            status = int(response)
+                            if status == 1:
+                                break
+                            time.sleep(0.1)
                 # self._target
                 return True
             except Exception as e:

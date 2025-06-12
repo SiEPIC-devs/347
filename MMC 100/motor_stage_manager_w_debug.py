@@ -328,7 +328,7 @@ class StageManager:
                 self._last_positions[axis] = position
         return ok
 
-    async def move_xy(self, xy_distance: Tuple[float, float]):
+    async def move_xy(self, xy_distance: Tuple[float, float], wait_for_completion = True):
         """
         MMC Supports multi-axes movement. Move only xy in tandem for safety. Relative movement
         
@@ -350,7 +350,7 @@ class StageManager:
         y_cmd = f"2MSR{y_mm:.6f}"
         cmd = f"{x_cmd};{y_cmd}"
         
-        return await self._safe_execute(f"moving {xy_distance} synchronously", self.motors[AxisType.X].move_xy(cmd))
+        return await self._safe_execute(f"moving {xy_distance} synchronously", self.motors[AxisType.X].move_xy(cmd, wait_for_completion))
     @requires_motor
     async def stop_axis(self, axis):
         return await self._safe_execute(f"stop {axis.name}", self.motors[axis].stop())
