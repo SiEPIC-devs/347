@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, Tuple, Callable
 # from dataclasses import replace
 import threading
 from concurrent.futures import ThreadPoolExecutor
+# import numpy as np
 
 from motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
 import serial
@@ -98,6 +99,7 @@ class StageControl(MotorHAL):
         self._move_in_progress = False
         self._target_position = None
         self._placeholder = ''
+        self._axis_grid: Tuple[float, float] = ()
     
     async def connect(self):
         """ 
@@ -189,7 +191,7 @@ class StageControl(MotorHAL):
             elif "POS?" in cmd:
                 raw = self._serial_port.read_until(b"\n\r")
                 text = raw.decode('ascii').strip()
-                print(f"POS raw: {text}")
+                # print(f"POS raw: {text}")
                 
                 if len(text) == 0:
                     raise Exception("No data received")
@@ -198,31 +200,6 @@ class StageControl(MotorHAL):
                 clean_text = text.strip('#')
                 values = clean_text.split(',')
                 return values
-
-    # async def _wait_for_home_completion(self, timeout: float = 30.0):
-    #     """
-    #     Monitor home completion 
-    #     """
-    #     def _home_completion():
-    #         try:
-    #             start_time = time.time()
-
-    #             while time.time() - start_time < timeout:
-    #                 # Check if motor is still moving
-    #                 response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?")
-    #                 status_int = int(response)
-
-    #                 # Status bit is 1 if stopped
-    #                 if status_int:
-    #                     print("Motor has finished homing")
-    #                     return True
-                    
-    #                 time.sleep(0.1)
-            
-    #         except Exception as e:
-    #             self._move_in_progress = False
-    #             self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
-    #             return False
             
     async def _wait_for_move_completion(self, target_position: float, operation_type: str = "move"):
         """
@@ -330,11 +307,19 @@ class StageControl(MotorHAL):
                 # Safety (Previously handled m way, don't know why)
                 lo, hi = self._position_limits
                 # if abs(position_mm) >= 1e-6 and abs(position_mm) <= (1000-1e-6):
-                if position > lo and position < hi: 
+                if position >= lo and position <= hi: 
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MVA{position_mm:.6f}")
-                    print("<<< cmd sent") 
+
+                    # Wait for movement
+                    if wait_for_completion:
+                        while True:
+                            response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
+                            status = int(response)
+                            if status == 1:
+                                break
+                            time.sleep(0.1) 
                 else:
-                    raise Exception(f"Distance entered exceeds softlimits, must be within bounds : {lo} < {position} < {hi}")
+                    raise Exception(f"Distance entered exceeds softlimits, must be within bounds : {lo} <= {position} <= {hi}")
 
                 # Update state tracking
                 self._move_in_progress = True
@@ -353,15 +338,8 @@ class StageControl(MotorHAL):
                 self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
                 return False
         
-        # Execute the move command
-        move_success = await asyncio.get_event_loop().run_in_executor(self._executor, _move)
+        return await asyncio.get_event_loop().run_in_executor(self._executor, _move)
         
-        if move_success and wait_for_completion:
-            # Start monitoring for completion in the background
-            asyncio.create_task(self._wait_for_move_completion(position, "absolute_move"))
-        
-        return move_success
-    
     async def move_relative(self, distance, velocity=None, wait_for_completion=True):
         """
         Move to rel pos in microns
@@ -374,26 +352,8 @@ class StageControl(MotorHAL):
         def _move_rel():
             try:
                 if velocity:
-                    # self._send_command(f"{self.AXIS_MAP[self.axis]}VA{velocity:.6f}")
-                    pass
-
-                # Convert um to mm
-                distance_mm = distance * 0.001
-
-                # Safety
-                lo, hi = self._position_limits
-                pos = self._last_position + distance # 
-                if pos > lo and pos < hi:  
-                # if abs(distance_mm) >= 1e-6 and abs(distance_mm) <= (1000-1e-6): # placeholder, 1 m is enormous
-                    self._send_command(f"{self.AXIS_MAP[self.axis]}MVR{distance_mm:.6f}") # mmc driver format for relmvm
-                else:
-                    raise Exception(f"Relative distance entered exceeds softlimits, must be within bounds : {lo} < {distance} < {hi}")
-
-                # Calculate target position
-                # target_position = self._last_position + distance
-                self._move_in_progress = True
-                self._target_position = pos
-
+                    self._send_command(f"{self.AXIS_MAP[self.axis]}VA{velocity:.6f}")
+                
                 # Event handling
                 self._emit_event(MotorEventType.MOVE_STARTED, {
                     "target_position": pos,
@@ -401,22 +361,40 @@ class StageControl(MotorHAL):
                     "velocity": velocity or self._velocity,
                     "operation": "relative_move"
                 })
+                # Convert um to mm
+                distance_mm = distance * 0.001
 
+                # Safety
+                lo, hi = self._position_limits
+                pos = self._last_position + distance # 
+                if pos >= lo and pos <= hi:  
+                    self._send_command(f"{self.AXIS_MAP[self.axis]}MVR{distance_mm:.6f}") 
+                    # Wait for movement
+                    if wait_for_completion:
+                        while True:
+                            response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
+                            status = int(response)
+                            if status == 1:
+                                break
+                            time.sleep(0.1)
+                else:
+                    raise Exception(f"Relative distance entered exceeds softlimits, must be within bounds : {lo} <= {distance} <= {hi}")
+
+                self._target_position = pos
+                self._last_position = pos
+                self._emit_event(MotorEventType.MOVE_COMPLETE, {
+                    "target_position": pos,
+                    "distance": distance,
+                    "velocity": velocity or self._velocity,
+                    "operation": "relative_move"
+                })
                 return pos
                     
             except Exception as e:
                 self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
                 return None
         
-        # Execute the move command
-        target_position = await asyncio.get_event_loop().run_in_executor(self._executor, _move_rel)
-        
-        if target_position is not None and wait_for_completion:
-            # Start monitoring for completion in the background
-            asyncio.create_task(self._wait_for_move_completion(target_position, "relative_move"))
-            return True
-        
-        return target_position is not None
+        return await asyncio.get_event_loop().run_in_executor(self._executor, _move_rel)
     
     async def stop(self):
         """
@@ -643,14 +621,16 @@ class StageControl(MotorHAL):
         After this runs, `neg_limit_um` will be 0.0 (since we ZRO there),
         and `pos_limit_um` will be the travel length in um.
         """
-        def _home_limits():
+        # Declare axis for each private method usage
+        axis_num = self.AXIS_MAP[self.axis]
+
+        def _get_limits():
+            """Get limit positions"""
             try:
                 # Homing is starting
                 self._emit_event(MotorEventType.MOVE_STARTED, {'operation': 'homing_limits'})
-                
-                # Declare axis
-                axis_num = self.AXIS_MAP[self.axis]
 
+                
                 # Send MLN to drive until negative limit is hit
                 self._send_command(f"{axis_num}MLN")
 
@@ -662,20 +642,12 @@ class StageControl(MotorHAL):
                         break
                     time.sleep(0.1)
 
-                # Read position at negative end
-                # Query POS? before zeroing. That gives the true "raw" encoder (in mm)
-                pos_resp = self._query_command(f"{axis_num}POS?")
-
-                # pos_resp looks like "X.XXXXXX,..." - take the first comma-separated value
-                neg_mm = float(pos_resp[0])
-                neg_um = neg_mm * 1000.0 # convert
-
-                # Zero neg limit, becomes 0 mm
+                # Zero neg limit, zeros by default so becomes 0 mm
                 self._send_command(f"{axis_num}ZRO")
 
                 # After ZRO, the controller’s internal position registers read zero at this point
-                bottom_zero_um = 0.0 
-                self._last_position = bottom_zero_um
+                bottom_zero_um = 0.0 # set bottom limit as controllers iternal position limit register
+                self._last_position = bottom_zero_um 
 
                 # Move pos limit switch
                 self._send_command(f"{axis_num}MLP")
@@ -690,11 +662,11 @@ class StageControl(MotorHAL):
 
                 # Read position at positive end
                 pos_resp2 = self._query_command(f"{axis_num}POS?")
-                top_mm = float(pos_resp2.split(",")[0])
-                top_um = top_mm * 1000.0
+                top_mm = float(pos_resp2[0])
+                top_um = top_mm * 1000.0 # Convert
                 self._last_position = top_um
 
-                # Software lims, 
+                # Software lims set
                 self._position_limits = (bottom_zero_um, top_um)
 
                 # Notify that homing, limit-finding is complete
@@ -704,6 +676,48 @@ class StageControl(MotorHAL):
             except Exception as e:
                 self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
                 return False
+            
+        def _mid_point():
+            """Go to mid point"""
+            try:
+                mid_point = (self._position_limits[1] - self._position_limits[0]) / 2
+                self._emit_event(MotorEventType.MOVE_STARTED, {'operation': 'middling'})
+                self._send_command(f"{axis_num}MVA{(mid_point/1000):.6f}")
+                
+                # Wait for completion
+                while True:
+                    response = self._query_command(f"{axis_num}STA?")
+                    status = int(response)
+                    pos = self._query_command(f"{axis_num}POS?")
+                    pos = float(pos[1])
+                    pos_um = pos * 1000.0 # Convert
+                    
+                    # If position reaches mid point, or movement has stopped and its accurate to 0.001 mm 
+                    if (pos_um == mid_point) or (status == 1): # messy
+                        break
+                    time.sleep(0.1)
+
+                # Get current position
+                self._emit_event(MotorEventType.MOVE_COMPLETE, {'pos': self._position_limits})
+                self._last_position = pos_um
+                return True
+        
+            except Exception as e:
+                self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
+                return False
+        
+        def _home_limits():
+            """Get position limits, go to mid point"""
+            try:
+                while not _get_limits():
+                    continue
+                while not _mid_point():
+                    continue
+                return True, self._position_limits
+            
+            except Exception as e:
+                self._emit_event(MotorEventType.ERROR_OCCURRED, {'error': str(e)})
+                return False, None
 
         return await asyncio.get_event_loop().run_in_executor(self._executor, _home_limits)
 

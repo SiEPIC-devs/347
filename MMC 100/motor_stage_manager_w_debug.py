@@ -18,6 +18,7 @@ With debug logging
 
 TODO:
     Test core movement capabilties beyond already done testing
+    Improve homing sequence
     Implement config params loading, consider converting dataclass to yaml
         yaml -> helper functions -> internal storage using dataclasses -> outputs, measurement information
     * Clean up modern stage ? 
@@ -79,7 +80,7 @@ class StageConfiguration():
         AxisType.X: 2000.0, # From zero xyz
         AxisType.Y: 2000.0,
         AxisType.Z: 2000.0,
-        AxisType.ROTATION_FIBER: 100.0,
+        AxisType.ROTATION_FIBER: 1000.0,
         AxisType.ROTATION_CHIP: 100.0
     })
     
@@ -114,7 +115,7 @@ class StageConfiguration():
     # chip_angle: float 
     # fiber_angle: float = 8.0 # degrees
 
-    # factory config ? 
+    # factory config 
     driver_types: Dict[AxisType, str] = field(default_factory=lambda: {
         AxisType.X: "stage_control", 
         AxisType.Y: "stage_control",
@@ -169,7 +170,7 @@ class StageManager:
             try:
                 cb(event)
             except Exception as e:
-                print(f"[{event.axis.name}] Error in manager‐level callback: {e}")
+                print(f"[{event.axis.name}] Error in manager-level callback: {e}")
 
     async def initialize(self, axes):
         """
@@ -252,9 +253,19 @@ class StageManager:
     
     @requires_motor
     async def home_limits(self, axis: AxisType) -> bool:
-        ok = await self._safe_execute(f"home {axis.name} limits", self.motors[axis].home_limits())
+        if (axis == AxisType.Z):
+            # Ensure safe homing of Z axis
+            aok = await self._safe_execute(f"", self.motors[AxisType.Y].move_absolute(
+                self.config.position_limits[AxisType.Y][1],
+                wait_for_completion=True
+            ))
+            if aok:
+                pass
+            else:
+                return False
+        ok, pos_lims = await self._safe_execute(f"home {axis.name} limits", self.motors[axis].home_limits())
         if ok:
-            self.config.position_limits[axis] = ok
+            self.config.position_limits[axis] = pos_lims
         return ok
 
     @requires_motor
