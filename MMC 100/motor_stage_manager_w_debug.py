@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, List, Optional, Tuple, Callable, Any
+from typing import Dict, List, Optional, Tuple, Callable, Any, Set
 from dataclasses import dataclass, field, fields
 from enum import Enum
 import time
@@ -9,6 +9,7 @@ from motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventTyp
 from modern_stage import StageControl
 from motor_factory import create_driver
 
+from helper import update_stage_position
 
 
 """
@@ -19,16 +20,18 @@ Stage manager, intended to interface with the GUI to give high level commands to
 With debug logging
 
 TODO:
-    Implement config params loading, consider converting dataclass to yaml
+    Improve config params loading, to consider outside entries
         yaml -> helper functions -> internal storage using dataclasses -> outputs, measurement information
     Clean up existing code, remove gunk, remove duplicates
+    Ensure that the other stages behave nicely. Concerned about movement patterns : will they be different logic at different stages?
     Change information access points, loading yaml etcs. Physical ways to store information for next use cases. 
-    Implement factories for drivers (may be at a different level)
     Implement cominterface ? may not be useful
-    Implement standardized interactions with hal
     Implement interactions with other hardware devices: lasers, detectors, TECs, Cams
     Implement interactions with gui
     Document control flow
+
+    After this, I think the HAL should have its first working prototype:
+        for next week, it would be nice to have a HAL for each element of this setup
 """
 
 # Configure logging
@@ -42,18 +45,112 @@ logger = logging.getLogger(__name__)
 STAGE_LIST = [347] # placeholder
 
 @dataclass
+class AxisPosition:
+    """
+    Holds a single axis's current position and homing status.
+    """
+    position: Optional[float]  # in microns
+    is_homed: bool
+
+@dataclass
 class StagePosition:
     """
-    Current position of stage
+    Aggregates the current positions and homing flags for all axes,
+    plus a timestamp and units.  
+
+    Usage in your manager:
+
+        # after any move or home operation that updates:
+        #    self._last_positions: Dict[AxisType, float]
+        #    self._homed_axes:    Set[AxisType]
+        self.stage_pos = StagePosition(
+            _last_positions=self._last_positions,
+            _homed_axes=self._homed_axes
+        )
+
+        # then elsewhere you can do:
+        x_pos = self.stage_pos.x.position
+        y_homed = self.stage_pos.y.is_homed
+        ts    = self.stage_pos.timestamp
+        units = self.stage_pos.units
     """
-    x: float
-    y: float
-    z: float
-    fiber_rotation: float
-    chip_rotation: float
-    timestamp: float
-    units: str = "um"
-    is_homed: bool = False
+    _last_positions: Dict[AxisType, float]    # e.g. {AxisType.X: 15000.0, ...}
+    _homed_axes:     Set[AxisType] = field(default_factory=set)
+    units:           str = "um"
+
+    # Filled in by update():
+    timestamp:       float         = field(init=False)
+    x:               AxisPosition  = field(init=False)
+    y:               AxisPosition  = field(init=False)
+    z:               AxisPosition  = field(init=False)
+    fiber_rotation:  AxisPosition  = field(init=False)
+    chip_rotation:   AxisPosition  = field(init=False)
+
+    def __post_init__(self):
+        # Initialize timestamp and AxisPosition attributes
+        self.update()
+
+    def update(self, homed_axes: Optional[Set[AxisType]] = None) -> None:
+        """
+        Refresh all AxisPosition fields and timestamp.
+
+        Args:
+            homed_axes: Optional set of axes known to be homed.
+                        If None, uses self._homed_axes.
+        
+        Example:
+            # after moving X and Y, but only X was homed earlier
+            self._last_positions = {AxisType.X: 10000.0, AxisType.Y: 5000.0}
+            self._homed_axes = {AxisType.X}
+            self.stage_pos.update()
+
+            # Now:
+            #   self.stage_pos.x.position == 10000.0
+            #   self.stage_pos.x.is_homed  == True
+            #   self.stage_pos.y.position == 5000.0
+            #   self.stage_pos.y.is_homed  == False
+        """
+        self.timestamp = time.time()
+        homed = homed_axes if homed_axes is not None else self._homed_axes
+
+        def make(axis: AxisType) -> AxisPosition:
+            return AxisPosition(
+                position=self._last_positions.get(axis),
+                is_homed=(axis in homed)
+            )
+
+        self.x              = make(AxisType.X)
+        self.y              = make(AxisType.Y)
+        self.z              = make(AxisType.Z)
+        self.fiber_rotation = make(AxisType.ROTATION_FIBER)
+        self.chip_rotation  = make(AxisType.ROTATION_CHIP)
+
+    # convenience properties
+    @property
+    def x_pos(self) -> Optional[float]:
+        """Shortcut for self.x.position"""
+        return self.x.position
+
+    @property
+    def y_pos(self) -> Optional[float]:
+        """Shortcut for self.y.position"""
+        return self.y.position
+
+    @property
+    def z_pos(self) -> Optional[float]:
+        """Shortcut for self.z.position"""
+        return self.z.position
+    
+    @property
+    def fr_pos(self) -> Optional[float]:
+        """Shortcut for self.fr.position"""
+        return self.fiber_rotation.position
+    
+    @property
+    def cp_pos(self) -> Optional[float]:
+        """Shortcut for self.cp.position"""
+        return self.chip_rotation.position
+
 
 @dataclass
 class StageConfiguration():
@@ -174,6 +271,7 @@ class StageManager:
             except Exception as e:
                 print(f"[{event.axis.name}] Error in manager-level callback: {e}")
 
+    @update_stage_position
     async def initialize(self, axes):
         """
         Initialize all stage axes
@@ -206,10 +304,12 @@ class StageManager:
                 self.motors[axis] = motor
                 self._last_positions[axis] = 0.0
                 motor.add_event_callback(self._handle_stage_event)
+                
             results[axis] = ok
 
         return all(results.values())
 
+    @update_stage_position
     @requires_motor
     async def home_axis(self, axis: AxisType, direction: int = 0) -> bool:
         ok = await self._safe_execute(f"home {axis.name}", self.motors[axis].home(direction))
@@ -222,6 +322,7 @@ class StageManager:
             self._last_positions[axis] = 0.0
         return ok
     
+    @update_stage_position
     @requires_motor
     async def home_limits(self, axis: AxisType) -> bool:
         if (axis == AxisType.Z):
@@ -244,6 +345,7 @@ class StageManager:
         ok = await self._safe_execute(f"home {axis.name} status", self.motors[axis]._wait_for_home_completion())
         return ok
     
+    @update_stage_position
     async def load_params(self) -> bool:
         """
         Loads preset params of a stage
@@ -267,6 +369,7 @@ class StageManager:
         
         return True
     
+    @update_stage_position
     @requires_motor
     async def move_single_axis(self, axis: AxisType, position: float,
                                relative=False, velocity=None,
@@ -296,6 +399,7 @@ class StageManager:
                 self._last_positions[axis] = position
         return ok
 
+    @update_stage_position
     async def move_xy_rel(self, xy_distance: Tuple[float, float], wait_for_completion = True):
         """
         MMC Supports multi-axes movement. Move only xy in tandem for safety. Relative movement
@@ -330,6 +434,7 @@ class StageManager:
 
         return (aok, bok)
     
+    @update_stage_position
     async def move_xy_absolute(self, xy_distance: Tuple[float, float], wait_for_completion = True):
         """
         MMC Supports multi-axes movement. Move only xy in tandem for safety. Absolute movement
@@ -365,13 +470,16 @@ class StageManager:
 
         return (aok, bok)
     
+    @update_stage_position
     @requires_motor
     async def stop_axis(self, axis):
         return await self._safe_execute(f"stop {axis.name}", self.motors[axis].stop())
 
+    @update_stage_position
     async def stop_all_axes(self):
         return {axis: await self.stop_axis(axis) for axis in self.motors}
 
+    @update_stage_position
     async def emergency_stop(self):
         if not self.motors:
             return False
