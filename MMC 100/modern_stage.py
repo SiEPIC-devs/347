@@ -99,7 +99,7 @@ class StageControl(MotorHAL):
         self._move_in_progress = False
         self._target_position = None
         self._placeholder = ''
-        self._axis_grid: Tuple[float, float] = ()
+        # self._axis_grid: Tuple[float, float] = ()
     
     async def connect(self):
         """ 
@@ -214,11 +214,17 @@ class StageControl(MotorHAL):
         def _move():
             try:
                 if velocity:
-                    # self._send_command(f"{self.AXIS_MAP[self.axis]}VA{velocity:.6f}")
-                    pass
+                    self._send_command(f"{self.AXIS_MAP[self.axis]}VA{velocity:.6f}")
 
-                # Convert um to mm
-                position_mm = position * 0.001
+                if self.axis == AxisType.ROTATION_FIBER:
+                    # Map from deg to mm
+                    lim = self._position_limits[1]
+                    distance = (45 - position) * (lim / 45) 
+                    position_mm = distance * 0.001
+                    print(position_mm)
+                else:
+                    # Convert um to mm
+                    position_mm = position * 0.001
 
                 # Safety (Previously handled m way, don't know why)
                 lo, hi = self._position_limits
@@ -346,8 +352,8 @@ class StageControl(MotorHAL):
                 return False
                 
         return await asyncio.get_event_loop().run_in_executor(self._executor, _estop)
-    
-    async def move_xy(self, cmd: str, wait_for_completion=True):
+   
+    async def move_xy(self, xy_distance: Tuple[float, float], wait_for_completion=True):
         """
         Move xy synchronously. Initialization handling should be done at the manager level
         
@@ -355,16 +361,32 @@ class StageControl(MotorHAL):
         """
         def _move_xy():
             try:
+                # Scale
+                x_um, y_um = xy_distance
+                x_mm = x_um / 1000
+                y_mm = y_um / 1000
+
+                # Cmd for sync relative mvmt
+                x_cmd = f"1MSR{x_mm:.6f}"
+                y_cmd = f"2MSR{y_mm:.6f}"
+                cmd = f"{x_cmd};{y_cmd}"
+
                 # Format is cmd newline 0RUN
-                self._send_command(cmd=cmd)
+                # self._send_command(cmd=cmd)
+                self._send_command(cmd=f"1MVR{x_mm:.6f}")
+                self._send_command(cmd=f"2MVR{y_mm:.6f}")
+                time.sleep(0.1)
                 self._send_command("0RUN")
                 self._move_in_progress = True
+                # self._send_command(f"1MVR{x_mm:.6f};2MVR{y_mm:.6f}")
 
                 if wait_for_completion:
                     while True:
-                            response = self._query_command(f"{self.AXIS_MAP[self.axis]}STA?") 
-                            status = int(response)
-                            if status == 1:
+                            response_x = self._query_command(f"{self.AXIS_MAP[AxisType.X]}STA?")
+                            response_y = self._query_command(f"{self.AXIS_MAP[AxisType.Y]}STA?") 
+                            status_x = int(response_x)
+                            status_y = int(response_y)
+                            if (status_x & status_y) == 1:
                                 break
                             time.sleep(0.1)
                 # self._target
@@ -372,6 +394,7 @@ class StageControl(MotorHAL):
             except Exception as e:
                 print(f"Move_xy error: {e}")
                 return False
+        return await asyncio.get_event_loop().run_in_executor(self._executor, _move_xy)
 
     # Status and Position
     async def get_position(self):
@@ -692,31 +715,6 @@ class StageControl(MotorHAL):
             'last_position': self._last_position,
             'position_tolerance': self._position_tolerance
         }
-    
-
-    # Event handling methods
-    # def add_event_callback(self, callback: Callable[[MotorEvent], None]):
-    #     """Register callback for motor events."""
-    #     self._event_callbacks.append(callback)
-    
-    # def remove_event_callback(self, callback: Callable[[MotorEvent], None]):
-    #     """Remove event callback."""
-    #     if callback in self._event_callbacks:
-    #         self._event_callbacks.remove(callback)
-    
-    # def _emit_event(self, event_type: MotorEventType, data: Dict[str, Any] = None):
-    #     """Emit event to all registered callbacks."""
-    #     event = MotorEvent(
-    #         axis=self.axis,
-    #         event_type=event_type,
-    #         data=data or {},
-    #         timestamp=time.time()
-    #     )
-    #     for callback in self._event_callbacks:
-    #         try:
-    #             callback(event)
-    #         except Exception as e:
-    #             print(f"Error in event callback: {e}")
 
 from motor_factory import register_driver
 

@@ -1,13 +1,15 @@
 import asyncio
 import logging
 from typing import Dict, List, Optional, Tuple, Callable, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 import time
 
 from motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
 from modern_stage import StageControl
 from motor_factory import create_driver
+
+
 
 """
 Made by: Cameron Basara, 5/30/2025
@@ -17,14 +19,12 @@ Stage manager, intended to interface with the GUI to give high level commands to
 With debug logging
 
 TODO:
-    Test core movement capabilties beyond already done testing
-    Improve homing sequence
     Implement config params loading, consider converting dataclass to yaml
         yaml -> helper functions -> internal storage using dataclasses -> outputs, measurement information
-    * Clean up modern stage ? 
     Clean up existing code, remove gunk, remove duplicates
     Change information access points, loading yaml etcs. Physical ways to store information for next use cases. 
     Implement factories for drivers (may be at a different level)
+    Implement cominterface ? may not be useful
     Implement standardized interactions with hal
     Implement interactions with other hardware devices: lasers, detectors, TECs, Cams
     Implement interactions with gui
@@ -56,16 +56,6 @@ class StagePosition:
     is_homed: bool = False
 
 @dataclass
-class MoveCommand:
-    """
-    Multi-axis movement command with options
-    """
-    axes: Dict[AxisType, float]  # axis -> target position/distance
-    velocity: Optional[float] = None
-    coordinated_motion: bool = False  # Move all axes simultaneously
-    relative: bool = False  # True for relative moves, False for absolute
-
-@dataclass
 class StageConfiguration():
     """
     Configuration parameters for the stage, this will later be altered to be passed through the GUI
@@ -80,8 +70,8 @@ class StageConfiguration():
         AxisType.X: 2000.0, # From zero xyz
         AxisType.Y: 2000.0,
         AxisType.Z: 2000.0,
-        AxisType.ROTATION_FIBER: 1000.0,
-        AxisType.ROTATION_CHIP: 100.0
+        AxisType.ROTATION_FIBER: 1000.0, # default : 100.0
+        AxisType.ROTATION_CHIP: 100.0 
     })
     
     accelerations: Dict[AxisType, float] = field(default_factory=lambda: {
@@ -93,11 +83,11 @@ class StageConfiguration():
     })
     
     position_limits: Dict[AxisType, Tuple[float, float]] = field(default_factory=lambda: {
-        AxisType.X: (-24940.0, 20000.0), # From zero_xyz
-        AxisType.Y: (-30400.0, 20000.0),
-        AxisType.Z: (-11100.0, 20000.0),
-        AxisType.ROTATION_FIBER: (-180.0, 180.0),
-        AxisType.ROTATION_CHIP: (-180.0, 180.0)
+        AxisType.X: (-24940.0, 20000.0), # From zero_xyz, exp shows (0.0, 30406.57) 
+        AxisType.Y: (-30400.0, 20000.0), # (0.0, 30441.85)
+        AxisType.Z: (-11100.0, 20000.0), # (0.0, 10922.302)
+        AxisType.ROTATION_FIBER: (-180.0, 180.0), # (0.0, 13108.784)
+        AxisType.ROTATION_CHIP: (-180.0, 180.0) # (0.0, 3.6)
     })
 
     # Completion detection settings
@@ -105,15 +95,27 @@ class StageConfiguration():
     status_poll_interval: float = 0.05  # seconds
     move_timeout: float = 30.0  # seconds
 
-    # # Intial position settings
-    # init_pos = {
+    # Intial position settings TODO: connect other features into a big data class, for laser tec etc.
+    # x_pos: Dict[AxisType, float] = {AxisType.X: position_limits[AxisType.X][1] / 2} # start pt in um PLACEHOLDER 
+    # y_pos: Dict[AxisType, float] = {AxisType.Y: position_limits[AxisType.Y][1] / 2} # um
+    # z_pos: Dict[AxisType, float] = {AxisType.Z: position_limits[AxisType.Z][1] * (2/3)} # um
+    # chip_angle: Dict[AxisType, float] = {AxisType.ROTATION_FIBER: 1.8} # from 0.0 - 3.6?
+    # fiber_angle: Dict[AxisType, float] = {AxisType.ROTATION_FIBER: 8.0} # degrees should be mapped to 0-90 inverted so 90 degrees corresponds to 0 endpt
 
-    # }
-    # x_pos: float # start pt in um PLACEHOLDER 
-    # y_pos: float # um
-    # z_pos: float # um
-    # chip_angle: float 
-    # fiber_angle: float = 8.0 # degrees
+    @property
+    def initial_positions(self) -> Dict[AxisType, float]:
+        """
+        Dynamically flatten all fields tagged with metadata {'initial': True}
+        into a single AxisType -> target map.
+        """
+        lim = self.position_limits
+        return {
+            AxisType.X:   lim[AxisType.X][1] * (2.0 / 3.0),
+            AxisType.Y:   lim[AxisType.Y][1],
+            AxisType.Z:   lim[AxisType.Z][1] * (2.0 / 3.0),
+            AxisType.ROTATION_CHIP:  1.8, # Ranges from 0.0 - 3.6
+            AxisType.ROTATION_FIBER: 22.5, # degrees
+        }
 
     # factory config 
     driver_types: Dict[AxisType, str] = field(default_factory=lambda: {
@@ -207,37 +209,6 @@ class StageManager:
             results[axis] = ok
 
         return all(results.values())
-    
-    # async def initialize(self, axes):
-    #     """
-    #     Initialize all stage axes
-    #     """
-    #     # Succesful initialization
-    #     results = {}
-
-    #     for axis in axes:
-    #         # Retrive config
-    #         cfg = self.config
-    #         motor = StageControl(
-    #             axis=axis,
-    #             com_port=cfg.com_port,
-    #             baudrate=cfg.baudrate,
-    #             timeout=cfg.timeout,
-    #             velocity=cfg.velocities[axis],
-    #             acceleration=cfg.accelerations[axis],
-    #             position_limits=cfg.position_limits[axis],
-    #             position_tolerance=cfg.position_tolerance,
-    #             status_poll_interval=cfg.status_poll_interval
-    #         )
-
-    #         # Catch exceptions
-    #         ok = await self._safe_execute(f"connect {axis.name}", motor.connect()) # motor connects from abstracted stage driver
-    #         if ok:
-    #             self.motors[axis] = motor
-    #             self._last_positions[axis] = 0.0
-    #             motor.add_event_callback(self._handle_stage_event)
-    #         results[axis] = ok
-    #     return all(results.values())
 
     @requires_motor
     async def home_axis(self, axis: AxisType, direction: int = 0) -> bool:
@@ -277,27 +248,24 @@ class StageManager:
         """
         Loads preset params of a stage
         """
-        # # Check if homed
-        # for motor in self.motors:
-        #     if motor._is_homed:
-        #         pass
-        #     else:
-        #         logger.error(f"Please home all axis")
-        #         return False
+        # Check if homed
+        for axis, motor in self.motors.items():
+            if not self.motors[axis]._is_homed:
+                logger.error(f"{axis.name} isn't homed - aborting load of params")
+                break
 
         # Intialize params
-        # cfg = self.config
-        # x = self.motors[AxisType.X]
-        # y = self.motors[AxisType.Y]
-        # z = self.motors[AxisType.Z]
-        # fr = self.motors[AxisType.ROTATION_FIBER]
-        # cp = self.motors[AxisType.ROTATION_CHIP]
-        # all = [x,y,z,fr,cp]
-
-        # # Load params
-        # for axis in all:
-        #     task_x = asyncio.create_task(axis, )
+        cfg = self.config
         
+        # Apply profiles
+        for axis, target in cfg.initial_positions.items():
+            print(f"axis: {axis.name} target: {target}")
+            ok = await self._safe_execute(f"move_absolute {axis.name}",
+                    self.motors[axis].move_absolute(target, velocity=cfg.velocities[axis], wait_for_completion=True))
+            if not ok:
+                return ok
+        
+        return True
     
     @requires_motor
     async def move_single_axis(self, axis: AxisType, position: float,
@@ -334,23 +302,113 @@ class StageManager:
         
         Args:
             xy_distance: (x,y) Distance you want to move in microns 
+            wait_for_completion: 
         """
         # Need xy to be initialized
         if (AxisType.X not in self.motors) or (AxisType.Y not in self.motors):
             logger.error(f"Axis XY not initialized")
             return False
+        # Move the axis synchronously with asyncio
+        aok = await self._safe_execute(f"move x axis: {xy_distance[0]}",
+                                       self.motors[AxisType.X].move_relative(distance=(xy_distance[0]/1000), 
+                                                                             wait_for_completion=False))
+        bok = await self._safe_execute(f"move x axis: {xy_distance[1]}",
+                                       self.motors[AxisType.Y].move_relative(distance=(xy_distance[1]/1000), 
+                                                                             wait_for_completion=False))
+        while not aok and not bok:
+            print("not aok not bok")
         
-        # Scale
-        x_um, y_um = xy_distance
-        x_mm = x_um / 1000
-        y_mm = y_um / 1000 
+        # Check if either axis is moving
+        while not await self.is_any_axis_moving():
+            print("some axis moving")
+            time.sleep(0.1)
 
-        # Cmd for sync relative mvmt
-        x_cmd = f"1MSR{x_mm:.6f}"
-        y_cmd = f"2MSR{y_mm:.6f}"
-        cmd = f"{x_cmd};{y_cmd}"
+        return aok, bok
+        # ok = await self._safe_execute(f"move_relative xy {xy_distance}",
+        #         self.motors[AxisType.X].move_xy(xy_distance, wait_for_completion = True))
+        # if ok:
+        #     self._last_positions[AxisType.X] += xy_distance[0]
+        #     self._last_positions[AxisType.Y] += xy_distance[1]
+        # if not ok:
+        #     print("what")
+        # return ok
+    
+    async def _wait_for_xy_completion(self):
+        """
+        XY move helper function, poll MMC-100 status until both X and Y axes have completed movement.
+        Uses non-blocking status queries.
+        """
+        # Give the motors a moment to actually start moving
+        await asyncio.sleep(0.05)  # 50ms initial delay
         
-        return await self._safe_execute(f"moving {xy_distance} synchronously", self.motors[AxisType.X].move_xy(cmd, wait_for_completion))
+        # Now wait for them to report as moving (optional verification step)
+        movement_started = False
+        start_time = asyncio.get_event_loop().time()
+        
+        while not movement_started and (asyncio.get_event_loop().time() - start_time) < 1.0:  # 1 second timeout
+            try:
+                x_moving, y_moving = await asyncio.gather(
+                    self.get_state(AxisType.X),
+                    self.get_state(AxisType.Y)
+                )
+                
+                if x_moving == MotorState.MOVING or y_moving == MotorState.MOVING:
+                    movement_started = True
+                    logger.debug("Movement detected, waiting for completion...")
+                    break
+                    
+                await asyncio.sleep(0.01)
+            except Exception as e:
+                logger.error(f"Error checking movement start: {e}")
+                break
+        
+        # If we never detected movement starting, assume it was very fast
+        if not movement_started:
+            logger.debug("No movement detected - possibly very short distance or already complete")
+            return
+        
+        # Now wait for completion
+        while True:
+            try:
+                x_moving, y_moving = await asyncio.gather(
+                    self.get_state(AxisType.X),
+                    self.get_state(AxisType.Y)
+                )
+                
+                if x_moving == MotorState.IDLE and y_moving == MotorState.IDLE:
+                    logger.debug("Both X and Y axes movement completed")
+                    break
+                    
+                await asyncio.sleep(0.02)  # 20ms polling interval
+                
+            except Exception as e:
+                logger.error(f"Error checking axis status: {e}")
+                break
+
+    
+    # async def _wait_for_xy_completion(self):
+    #     """
+    #     XY move helper function, poll MMC-100 status until both X and Y axes have completed movement.
+    #     Uses non-blocking status queries.
+    #     """
+    #     while True:
+    #         try:
+    #             # Check both axis concurrently
+    #             x_moving, y_moving = await asyncio.gather(
+    #                 self.get_state(AxisType.X),
+    #                 self.get_state(AxisType.Y)
+    #             )
+
+    #             if x_moving == MotorState.IDLE and y_moving == MotorState.IDLE:
+    #                 logger.debug("Both X and Y axes movement completed")
+    #                 break
+                
+    #             await asyncio.sleep(0.1)
+            
+    #         except Exception as e:
+    #             logger.error(f"Error checking axis status: {e}")
+    #             break
+    
     @requires_motor
     async def stop_axis(self, axis):
         return await self._safe_execute(f"stop {axis.name}", self.motors[axis].stop())
@@ -366,7 +424,6 @@ class StageManager:
                 await self._safe_execute(f"emergency_stop axis {self.motors[axis]}", self.motors[axis].emergency_stop())
         return True
         
-
     @requires_motor
     async def get_position(self, axis: AxisType) -> Optional[Position]:
         return await self._safe_execute(f"get_position {axis.name}", self.motors[axis].get_position(), default=None)
@@ -382,7 +439,7 @@ class StageManager:
         return data
 
     @requires_motor
-    async def get_state(self, axis) -> Optional[MotorState]:
+    async def get_state(self, axis: AxisType) -> Optional[MotorState]:
         return await self._safe_execute(f"get_state {axis.name}", self.motors[axis].get_state(), default=None)
 
     async def is_any_axis_moving(self):
