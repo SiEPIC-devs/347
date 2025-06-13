@@ -86,14 +86,14 @@ async def demo():
     
     # await mgr.load_params()
 
-    x, y = await mgr.move_xy((5000,5000), wait_for_completion=False)
+    x, y = await mgr.move_xy((5000,-5000), wait_for_completion=True)
     if x and y:
         print(f"success xy: {x} {y}")
     else:
         print(f"error {x} {y}")
    
     await mgr.get_all_positions()
-    
+
     # disc all
     print("\n>>> Disconnecting …")
     await mgr.disconnect_all()

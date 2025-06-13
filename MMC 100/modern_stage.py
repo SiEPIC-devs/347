@@ -308,7 +308,7 @@ class StageControl(MotorHAL):
                 self._last_position = pos
                 self._emit_event(MotorEventType.MOVE_COMPLETE, {
                     "target_position": pos,
-                    "distance": distance,
+                    "distance": distance, # this isnt right
                     "velocity": velocity or self._velocity,
                     "operation": "relative_move"
                 })

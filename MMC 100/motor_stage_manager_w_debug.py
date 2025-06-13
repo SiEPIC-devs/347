@@ -309,19 +309,24 @@ class StageManager:
             logger.error(f"Axis XY not initialized")
             return False
         # Move the axis synchronously with asyncio
-        aok = await self._safe_execute(f"move x axis: {xy_distance[0]}",
-                                       self.motors[AxisType.X].move_relative(distance=(xy_distance[0]/1000), 
-                                                                             wait_for_completion=False))
-        bok = await self._safe_execute(f"move x axis: {xy_distance[1]}",
-                                       self.motors[AxisType.Y].move_relative(distance=(xy_distance[1]/1000), 
-                                                                             wait_for_completion=False))
-        while not aok and not bok:
-            print("not aok not bok")
-        
-        # Check if either axis is moving
-        while not await self.is_any_axis_moving():
-            print("some axis moving")
-            time.sleep(0.1)
+        tx = asyncio.create_task(
+            self._safe_execute(f"move x axis: {xy_distance[0]}",
+                                       self.motors[AxisType.X].move_relative(distance=(xy_distance[0]), 
+                                                                             wait_for_completion=wait_for_completion)))
+        ty = asyncio.create_task(self._safe_execute(f"move x axis: {xy_distance[1]}",
+                                       self.motors[AxisType.Y].move_relative(distance=(xy_distance[1]), 
+                                                                             wait_for_completion=wait_for_completion)))
+        # Wait for each task to finish
+        aok, bok = await asyncio.gather(tx, ty)
+
+        # report failure
+        if not (aok and bok):
+            logger.error(f"move_xy failed: X ok?{aok} Y ok?{bok}")
+            return False
+
+        # Update last pos
+        self._last_positions[AxisType.X] += xy_distance[0]
+        self._last_positions[AxisType.Y] += xy_distance[1]
 
         return aok, bok
         # ok = await self._safe_execute(f"move_relative xy {xy_distance}",
