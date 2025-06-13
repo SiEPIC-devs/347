@@ -296,7 +296,7 @@ class StageManager:
                 self._last_positions[axis] = position
         return ok
 
-    async def move_xy(self, xy_distance: Tuple[float, float], wait_for_completion = True):
+    async def move_xy_rel(self, xy_distance: Tuple[float, float], wait_for_completion = True):
         """
         MMC Supports multi-axes movement. Move only xy in tandem for safety. Relative movement
         
@@ -328,91 +328,42 @@ class StageManager:
         self._last_positions[AxisType.X] += xy_distance[0]
         self._last_positions[AxisType.Y] += xy_distance[1]
 
-        return aok, bok
-        # ok = await self._safe_execute(f"move_relative xy {xy_distance}",
-        #         self.motors[AxisType.X].move_xy(xy_distance, wait_for_completion = True))
-        # if ok:
-        #     self._last_positions[AxisType.X] += xy_distance[0]
-        #     self._last_positions[AxisType.Y] += xy_distance[1]
-        # if not ok:
-        #     print("what")
-        # return ok
+        return (aok, bok)
     
-    async def _wait_for_xy_completion(self):
+    async def move_xy_absolute(self, xy_distance: Tuple[float, float], wait_for_completion = True):
         """
-        XY move helper function, poll MMC-100 status until both X and Y axes have completed movement.
-        Uses non-blocking status queries.
+        MMC Supports multi-axes movement. Move only xy in tandem for safety. Absolute movement
+        
+        Args:
+            xy_distance: (x,y) Distance you want to move in microns 
+            wait_for_completion: key to set for wait for completion, currently only works with key set to True
         """
-        # Give the motors a moment to actually start moving
-        await asyncio.sleep(0.05)  # 50ms initial delay
+        # Need xy to be initialized
+        if (AxisType.X not in self.motors) or (AxisType.Y not in self.motors):
+            logger.error(f"Axis XY not initialized")
+            return False
         
-        # Now wait for them to report as moving (optional verification step)
-        movement_started = False
-        start_time = asyncio.get_event_loop().time()
-        
-        while not movement_started and (asyncio.get_event_loop().time() - start_time) < 1.0:  # 1 second timeout
-            try:
-                x_moving, y_moving = await asyncio.gather(
-                    self.get_state(AxisType.X),
-                    self.get_state(AxisType.Y)
-                )
-                
-                if x_moving == MotorState.MOVING or y_moving == MotorState.MOVING:
-                    movement_started = True
-                    logger.debug("Movement detected, waiting for completion...")
-                    break
-                    
-                await asyncio.sleep(0.01)
-            except Exception as e:
-                logger.error(f"Error checking movement start: {e}")
-                break
-        
-        # If we never detected movement starting, assume it was very fast
-        if not movement_started:
-            logger.debug("No movement detected - possibly very short distance or already complete")
-            return
-        
-        # Now wait for completion
-        while True:
-            try:
-                x_moving, y_moving = await asyncio.gather(
-                    self.get_state(AxisType.X),
-                    self.get_state(AxisType.Y)
-                )
-                
-                if x_moving == MotorState.IDLE and y_moving == MotorState.IDLE:
-                    logger.debug("Both X and Y axes movement completed")
-                    break
-                    
-                await asyncio.sleep(0.02)  # 20ms polling interval
-                
-            except Exception as e:
-                logger.error(f"Error checking axis status: {e}")
-                break
+        # Move the axis synchronously with asyncio
+        tx = asyncio.create_task(
+            self._safe_execute(f"move x axis: {xy_distance[0]}",
+                                       self.motors[AxisType.X].move_absolute(position=(xy_distance[0]), 
+                                                                             wait_for_completion=wait_for_completion)))
+        ty = asyncio.create_task(self._safe_execute(f"move x axis: {xy_distance[1]}",
+                                       self.motors[AxisType.Y].move_absolute(position=(xy_distance[1]), 
+                                                                             wait_for_completion=wait_for_completion)))
+        # Wait for each task to finish
+        aok, bok = await asyncio.gather(tx, ty)
 
-    
-    # async def _wait_for_xy_completion(self):
-    #     """
-    #     XY move helper function, poll MMC-100 status until both X and Y axes have completed movement.
-    #     Uses non-blocking status queries.
-    #     """
-    #     while True:
-    #         try:
-    #             # Check both axis concurrently
-    #             x_moving, y_moving = await asyncio.gather(
-    #                 self.get_state(AxisType.X),
-    #                 self.get_state(AxisType.Y)
-    #             )
+        # report failure
+        if not (aok and bok):
+            logger.error(f"move_xy failed: X ok?{aok} Y ok?{bok}")
+            return False
 
-    #             if x_moving == MotorState.IDLE and y_moving == MotorState.IDLE:
-    #                 logger.debug("Both X and Y axes movement completed")
-    #                 break
-                
-    #             await asyncio.sleep(0.1)
-            
-    #         except Exception as e:
-    #             logger.error(f"Error checking axis status: {e}")
-    #             break
+        # Update last pos
+        self._last_positions[AxisType.X] += xy_distance[0]
+        self._last_positions[AxisType.Y] += xy_distance[1]
+
+        return (aok, bok)
     
     @requires_motor
     async def stop_axis(self, axis):

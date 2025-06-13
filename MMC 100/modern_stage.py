@@ -352,49 +352,6 @@ class StageControl(MotorHAL):
                 return False
                 
         return await asyncio.get_event_loop().run_in_executor(self._executor, _estop)
-   
-    async def move_xy(self, xy_distance: Tuple[float, float], wait_for_completion=True):
-        """
-        Move xy synchronously. Initialization handling should be done at the manager level
-        
-        Does not work
-        """
-        def _move_xy():
-            try:
-                # Scale
-                x_um, y_um = xy_distance
-                x_mm = x_um / 1000
-                y_mm = y_um / 1000
-
-                # Cmd for sync relative mvmt
-                x_cmd = f"1MSR{x_mm:.6f}"
-                y_cmd = f"2MSR{y_mm:.6f}"
-                cmd = f"{x_cmd};{y_cmd}"
-
-                # Format is cmd newline 0RUN
-                # self._send_command(cmd=cmd)
-                self._send_command(cmd=f"1MVR{x_mm:.6f}")
-                self._send_command(cmd=f"2MVR{y_mm:.6f}")
-                time.sleep(0.1)
-                self._send_command("0RUN")
-                self._move_in_progress = True
-                # self._send_command(f"1MVR{x_mm:.6f};2MVR{y_mm:.6f}")
-
-                if wait_for_completion:
-                    while True:
-                            response_x = self._query_command(f"{self.AXIS_MAP[AxisType.X]}STA?")
-                            response_y = self._query_command(f"{self.AXIS_MAP[AxisType.Y]}STA?") 
-                            status_x = int(response_x)
-                            status_y = int(response_y)
-                            if (status_x & status_y) == 1:
-                                break
-                            time.sleep(0.1)
-                # self._target
-                return True
-            except Exception as e:
-                print(f"Move_xy error: {e}")
-                return False
-        return await asyncio.get_event_loop().run_in_executor(self._executor, _move_xy)
 
     # Status and Position
     async def get_position(self):

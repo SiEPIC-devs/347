@@ -78,7 +78,10 @@ async def demo():
         else:
             print("fr failed to home")
 
-    await home_all()
+    # await home_all()
+
+    await mgr.home_limits(x)
+    await mgr.home_limits(y)
 
     # Print limits
     # for axis in all:
@@ -86,11 +89,44 @@ async def demo():
     
     # await mgr.load_params()
 
-    x, y = await mgr.move_xy((5000,-5000), wait_for_completion=True)
-    if x and y:
-        print(f"success xy: {x} {y}")
+    # await asyncio.sleep(10) # wait for me to go to the stage
+
+    # a, b = await mgr.move_xy_rel((-5000,-5000), wait_for_completion=True)
+    # if a and b:
+    #     print(f"success xb: {a} {b}")
+    # else:
+    #     print(f"error {a} {b}")
+   
+    # await mgr.get_all_positions()
+    
+    # await asyncio.sleep(1)
+    # print("this should wait 1 sec, then 1 sec")
+    # await asyncio.sleep(1)
+
+    # a, b = await mgr.move_xy_rel((5000,-5000), wait_for_completion=True)
+    # if a and b:
+    #     print(f"success xb: {a} {b}")
+    # else:
+    #     print(f"error {a} {b}")
+   
+    # await mgr.get_all_positions()
+
+    lox, highx = mgr.config.position_limits[x]
+    loy, highy = mgr.config.position_limits[y]
+
+    c, d = await mgr.move_xy_absolute((lox, loy), wait_for_completion=True)
+    if c and d:
+        print(f"success xd: {c} {d}")
     else:
-        print(f"error {x} {y}")
+        print(f"error {c} {d}")
+   
+    await mgr.get_all_positions()
+
+    c, d = await mgr.move_xy_absolute((highx, highy), wait_for_completion=True)
+    if d and c:
+        print(f"success dc: {d} {c}")
+    else:
+        print(f"error {d} {c}")
    
     await mgr.get_all_positions()
 
