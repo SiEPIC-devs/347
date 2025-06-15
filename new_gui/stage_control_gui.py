@@ -5,6 +5,7 @@ import threading
 import webview
 import signal
 import socket
+import time
 
 class stage_control(App):
     def __init__(self, *args, **kwargs):
@@ -26,7 +27,7 @@ class stage_control(App):
         xyz_container = StyledContainer(container=stage_control_container, variable_name="xyz_container",
                                         left=0, top=20, height=300, width=410)
 
-        StyledButton(container=xyz_container, text="Stop", variable_name="stop_button", font_size=100,
+        self.stop_button = StyledButton(container=xyz_container, text="Stop", variable_name="stop_button", font_size=100,
                      left=125, top=10, width=90, height=30, normal_color="#dc3545", press_color="#c82333")
         StyledCheckBox(container=xyz_container, variable_name="lock_box", left=225, top=10,
                        width=10, height=10, position="absolute")
@@ -58,7 +59,7 @@ class stage_control(App):
                         left=280, top=top, width=100, height=30, font_size=100, color="#222",
                         flex=True, bold=True, justify_content="right")
 
-        StyledButton(container=xyz_container, text="Zero", variable_name="zero_button", font_size=100,
+        self.zero_button = StyledButton(container=xyz_container, text="Zero", variable_name="zero_button", font_size=100,
                      left=310, top=10, width=90, height=30, normal_color="#007BFF", press_color="#0056B3")
 
         limits_container = StyledContainer(container=stage_control_container, variable_name="limits_container",
@@ -98,23 +99,39 @@ class stage_control(App):
                      normal_color="#007BFF", press_color="#0056B3")
 
         move_container = StyledContainer(container=stage_control_container, variable_name="move_container",
-                                         left=430, top=240, height=90, width=200, border=True)
+                                         left=430, top=240, height=88, width=200, border=True)
         StyledLabel(container=move_container, text="Move To Device", variable_name="move_label",
                     left=50, top=-12, width=100, height=20, font_size=100, color="#444", position="absolute",
                     flex=True, on_line=True, justify_content="center")
         StyledLabel(container=move_container, text="Move to", variable_name="move_to_label",
-                    left=0, top=15, width=60, height=30, font_size=100, color="#222",
+                    left=0, top=15, width=60, height=28, font_size=100, color="#222",
                     position="absolute", flex=True, justify_content="right")
         StyledDropDown(container=move_container, variable_name="move_to_dd", text=["Device 1", "Device 2"],
-                       left=75, top=15, height=30, width=115)
+                       left=75, top=15, height=28, width=115)
         StyledButton(container=move_container, text="Move", variable_name="move_button",
-                     font_size=100, left=75, top=55, width=115, height=30,
+                     font_size=100, left=75, top=50, width=115, height=28,
                      normal_color="#007BFF", press_color="#0056B3")
+        self.stop_button.do_onclick(self.onclick_stop)
+        self.zero_button.do_onclick(self.onclick_zero)
 
         self.stage_control_container = stage_control_container
         return stage_control_container
 
+    def onclick_stop(self, emitter):
+        def print_alternating():
+            for i in range(10):
+                print("stop")
+                time.sleep(1)
 
+        threading.Thread(target=print_alternating, daemon=True).start()
+
+    def onclick_zero(self, emitter):
+        def print_alternating():
+            for i in range(10):
+                print("zero")
+                time.sleep(1)
+
+        threading.Thread(target=print_alternating, daemon=True).start()
 def get_local_ip():
     """Automatically detect local LAN IP address"""
     try:

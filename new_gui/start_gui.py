@@ -1,6 +1,7 @@
 from remi.gui import *
 from myguilab import *
 from remi import start, App
+import time
 import os
 
 
@@ -28,7 +29,7 @@ class starts(App):
 
         StyledLabel(container=starts_container, text="Welcome to 347 Probe Stage", variable_name="label_configuration",
                                  left=180, top=20, width=300, height=20, font_size=150, color="#222", align="left")
-        StyledButton(container=starts_container, text="Edit", variable_name="edit",
+        self.edit_button = StyledButton(container=starts_container, text="Edit", variable_name="edit",
                             left=260, top=180, normal_color="#007BFF", press_color="#0056B3")
         StyledButton(container=starts_container, text="Remove", variable_name="remove",
                               left=380, top=180, normal_color="#dc3545", press_color="#c82333")
@@ -36,13 +37,17 @@ class starts(App):
                                              left=0, top=500, height=150, width=650, bg_color=True)
         self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
                                  left=10, top=15, width=610, height=100)
-
+        self.edit_button.do_onclick(self.onclick_edit)
 
         self.starts_container = starts_container
         return starts_container
 
-    def onclick_connect(self, key):
-        pass
+    def onclick_edit(self, emitter):
+        def print_alternating():
+            for i in range(10):
+                print("zero 3")
+                time.sleep(1)
+        threading.Thread(target=print_alternating, daemon=True).start()
 
 if __name__ == "__main__":
     configuration = {

@@ -1,12 +1,33 @@
 from myguilab import *
 from remi.gui import *
 from remi import start, App
+import json
+import coordinates
 import os
 
+def fmt(val):
+    try:
+        return f"{float(val):.2f}"
+    except (ValueError, TypeError):
+        return str(val)
 
 class testing(App):
     def __init__(self, *args, **kwargs):
+        file_path = os.path.join(os.getcwd(), "database", "selection_serial.json")
+        with open(file_path, "r") as f:
+            self.serial_list = json.load(f)
         self.timestamp = -1
+        self.gds = coordinates.coordinates(read_file=False, name="./database/coordinates.json")
+        self.number = self.gds.listdeviceparam("number")
+        self.coordinate = self.gds.listdeviceparam("coordinate")
+        self.polarization = self.gds.listdeviceparam("polarization")
+        self.wavelength = self.gds.listdeviceparam("wavelength")
+        self.type = self.gds.listdeviceparam("type")
+        self.devicename = [f"{name} ({num})" for name, num in zip(self.gds.listdeviceparam("devicename"), self.number)]
+        self.length = len(self.serial_list)
+        self.filtered_idx = self.serial_list
+        self.page_size = 50
+        self.page_index = 0
         if "editing_mode" not in kwargs:
             super(testing, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
@@ -16,7 +37,49 @@ class testing(App):
     def main(self):
         return testing.construct_ui(self)
 
-    @staticmethod
+    def build_table_rows(self):
+        table = self.table
+        data_rows = list(table.children.values())[1:]
+
+        start_i = self.page_index * self.page_size
+        end_i = min(len(self.filtered_idx), start_i + self.page_size)
+        page_idx_slice = self.filtered_idx[start_i:end_i]
+        needed = len(page_idx_slice)
+        cur = len(data_rows)
+
+        if needed > cur:
+            for _ in range(needed - cur):
+                tr = TableRow()
+                for w in self.col_widths:
+                    tr.append(TableItem("", style={
+                        "width": f"{w}px",
+                        "height": "30px",
+                        "text-align": "center",
+                        "border-bottom": "1px solid #ebebeb",
+                        "padding": "1px 2px",
+                        "overflow": "hidden",
+                        "text-overflow": "ellipsis",
+                        "white-space": "nowrap"
+                    }))
+                table.append(tr)
+                data_rows.append(tr)
+
+        for row_idx, row in enumerate(data_rows):
+            if row_idx < needed:
+                global_idx = page_idx_slice[row_idx]
+                cells = list(row.children.values())
+                bg = "#ffffff" if (start_i + row_idx) % 2 == 0 else "#f6f7f9"
+                for c in cells:
+                    c.style.update({"display": "table-cell", "background-color": bg})
+
+                cells[0].set_text(self.devicename[global_idx])
+                cells[1].set_text("0")
+
+            else:
+                for c in row.children.values():
+                    c.style["display"] = "none"
+
+
     def construct_ui(self):
         testing_container = StyledContainer(container=None, variable_name="testing_container", left=0, top=0)
 
@@ -65,11 +128,13 @@ class testing(App):
         StyledButton(container=setting_container, text="Setting", variable_name="setting",
                      left=145, top=0, width=90, height=30, normal_color="#007BFF", press_color="#0056B3")
         headers = ["Device", "Status"]
-        widths = [60, 40]
+        self.col_widths = [100, 20]
         table_container = StyledContainer(container=setting_container, variable_name="setting_container",
                                           left=0, top=40, height=295, width=240, border=True, overflow=True)
-        StyledTable(container=table_container, variable_name="device_status",
-                    left=0, top=0, height=25, table_width=240, headers=headers, widths=widths, row=14)
+        self.table = StyledTable(container=table_container, variable_name="device_status",
+                                 left=0, top=0, height=25, table_width=240, headers=headers, widths=self.col_widths, row=1)
+        self.build_table_rows()
+
         StyledButton(container=setting_container, text="Start", variable_name="start",
                      left=0, top=375, width=70, height=30, normal_color="#007BFF", press_color="#0056B3")
         StyledButton(container=setting_container, text="Stop", variable_name="stop",
@@ -100,7 +165,7 @@ if __name__ == "__main__":
         "config_port": 9004,
         "config_multiple_instance": False,
         "config_enable_file_cache": False,
-        "config_start_browser": False,
+        "config_start_browser": True,
         "config_resourcepath": "./res/"
     }
     start(testing,
