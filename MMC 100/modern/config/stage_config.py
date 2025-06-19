@@ -29,7 +29,7 @@ class StageConfiguration:
             "velocities": {ax.name: v for ax, v in self.velocities.items()},
             "position_limits": {ax.name: lim for ax, lim in self.position_limits.items()},
         }).encode("utf-8")
-        shm = shared_memory.SharedMemory(create=True, size=len(js))
+        shm = shared_memory.SharedMemory(create=True, size=len(js)) # Should contain a name to identify the shared mem block
         shm.buf[:len(js)] = js
         return shm, len(js)
 
@@ -49,5 +49,5 @@ class StageConfiguration:
             velocities=velocities,
             position_limits=limits
         )
-        shm.close()
+        shm.close() # shm.unlink() has no effect on windows systems
         return cfg

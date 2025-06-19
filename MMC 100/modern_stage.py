@@ -291,6 +291,7 @@ class StageControl(MotorHAL):
                     "velocity": velocity or self._velocity,
                     "operation": "relative_move"
                 })
+                
                 if pos >= lo and pos <= hi:  
                     self._send_command(f"{self.AXIS_MAP[self.axis]}MVR{distance_mm:.6f}") 
                     # Wait for movement
