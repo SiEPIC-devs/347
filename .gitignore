@@ -2,5 +2,6 @@
 .venv/
 venv/
 __pycache__/
+'MMC 100'/modern/__pycache__/
 *.pyc
 .vscode/
