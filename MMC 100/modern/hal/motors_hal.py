@@ -16,12 +16,12 @@ while hiding the complexity of the underlying legacy drivers.
 
 class AxisType(Enum):
     """Standardized axis types across all motor systems"""
-    X = "x"
-    Y = "y" 
-    Z = "z"
-    ROTATION_FIBER = "fr"  # Fiber rotation
-    ROTATION_CHIP = "cr"   # Chip rotation
-    ALL = "all"
+    X = 0
+    Y = 1 
+    Z = 2
+    ROTATION_FIBER = 3  # Fiber rotation
+    ROTATION_CHIP = 4   # Chip rotation
+    ALL = 5
 
 
 class MotorState(Enum):

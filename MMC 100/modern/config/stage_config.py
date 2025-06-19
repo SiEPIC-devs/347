@@ -1,8 +1,8 @@
-import json
-from dataclasses import dataclass, asdict
 from multiprocessing import shared_memory
+import json
+from dataclasses import asdict, dataclass, field
 from typing import Dict, Tuple
-from motors_hal import AxisType
+from modern.hal.motors_hal import AxisType
 
 @dataclass
 class StageConfiguration:
@@ -51,3 +51,4 @@ class StageConfiguration:
         )
         shm.close() # shm.unlink() has no effect on windows systems
         return cfg
+    
