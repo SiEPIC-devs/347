@@ -12,13 +12,11 @@ class coordinates:
 
     def __init__(self, file_directory='./', name='coordinates.json', read_file=False):
         self.path = file_directory
-        print(name)
         self.device_db = TinyDB(name)
         self.device = Query()
         if read_file == True:
             self.device_db.truncate()
             self.read_file()
-        print("Finished")
 
     def read_file(self):
         """

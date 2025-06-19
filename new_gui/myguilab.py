@@ -1,5 +1,6 @@
 from remi.gui import *
 import os
+import time
 
 def apply_common_style(widget, left, top, width, height, position="absolute", percent=False):
     widget.css_position = position
@@ -13,7 +14,7 @@ def apply_common_style(widget, left, top, width, height, position="absolute", pe
         widget.css_height = f"{height}px"
 
 class StyledContainer(Container):
-    def __init__(self, variable_name, left, top, width=650, height=650, border=False, bg_color=False,
+    def __init__(self, variable_name, left, top, width=650, height=650, border=False, bg_color=False, color = "#DCDCDC",
                  position="absolute", percent=False, overflow=False, container=None, line="1.5px solid #888"):
         super().__init__()
         apply_common_style(self, left, top, width, height, position, percent)
@@ -22,7 +23,7 @@ class StyledContainer(Container):
             self.style["border"] = line
             self.style["border-radius"] = "4px"
         if bg_color:
-            self.style["background-color"] = "grey"
+            self.style["background-color"] = color
         if overflow:
             self.style.update({
                 "overflow": "auto",
@@ -247,7 +248,11 @@ class StyledTextInput(TextInput):
             "text-align": "center",
             "display": "flex",
             "align-items": "center",
-            "justify-content": "center"
+            "justify-content": "center",
+            "white-space": "nowrap",
+            "overflow-x": "hidden",
+            "overflow-y": "hidden",
+            "resize": "none"
         })
         if container:
             container.append(self, self.variable_name)

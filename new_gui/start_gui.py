@@ -1,10 +1,9 @@
 from remi.gui import *
 from myguilab import *
-from remi import start, App
-import time
-import os
+from remi import start, App, gui
+import os, shutil, threading, webview
 
-
+ROOT_DIR = ".\\UserData"
 class starts(App):
     def __init__(self, *args, **kwargs):
         if "editing_mode" not in kwargs:
@@ -12,56 +11,102 @@ class starts(App):
 
     def idle(self):
         self.terminal.terminal_refresh()
+        now = tuple(self.list_user_folders())
+        if getattr(self, "_last_folders", None) != now:
+            self.refresh()
+            self._last_folders = now
 
     def main(self):
-        return starts.construct_ui(self)
+        return self.construct_ui()
 
-    @staticmethod
+    def run_in_thread(self, target, *args):
+        threading.Thread(target=target, args=args, daemon=True).start()
+
+    def list_user_folders(self):
+        names = [d for d in os.listdir(ROOT_DIR)
+                 if os.path.isdir(os.path.join(ROOT_DIR, d))]
+        if not names:
+            return ""
+        if len(names) == 1:
+            return names[0]
+        return names
+
     def construct_ui(self):
-
         starts_container = StyledContainer(variable_name="starts_container", left=0, top=0)
+        user_folders = self.list_user_folders()
 
-        for idx, key in enumerate(("user", "mode")):
-            StyledLabel(container=starts_container, text={"user": "User:", "mode": "Operating Mode:"}[key], variable_name=f"label_{key}",
-                                     left=100, top=105 + idx*40, width=150, height=20, font_size=100, color="#444", align="right")
-            StyledDropDown(container=starts_container, text={"user": ["User A", "User B", "User C"], "mode": ["TE mode", "TM mode"]}[key],
-                                variable_name=f"set_{key}", left=260, top=100 + idx*40, width=220, height=30)
+        self.user_dd = StyledDropDown(container=starts_container,
+                                      text=user_folders,
+                                      variable_name="set_user",
+                                      left=260, top=100, width=220, height=30)
+
+        self.mode_dd = StyledDropDown(container=starts_container,
+                                      text=["TE mode", "TM mode"],
+                                      variable_name="set_mode",
+                                      left=260, top=140, width=220, height=30)
+        StyledLabel(container=starts_container, text="User:",
+                    variable_name="label_user",
+                    left=100, top=105, width=150, height=20,
+                    font_size=100, color="#444", align="right")
+        StyledLabel(container=starts_container, text="Operating Mode:",
+                    variable_name="label_mode",
+                    left=100, top=145, width=150, height=20,
+                    font_size=100, color="#444", align="right")
 
         StyledLabel(container=starts_container, text="Welcome to 347 Probe Stage", variable_name="label_configuration",
                                  left=180, top=20, width=300, height=20, font_size=150, color="#222", align="left")
-        self.edit_button = StyledButton(container=starts_container, text="Edit", variable_name="edit",
-                            left=260, top=180, normal_color="#007BFF", press_color="#0056B3")
-        StyledButton(container=starts_container, text="Remove", variable_name="remove",
-                              left=380, top=180, normal_color="#dc3545", press_color="#c82333")
+        self.add_btn = StyledButton(container=starts_container, text="Add", variable_name="add",
+                                    left=260, top=180, normal_color="#007BFF", press_color="#0056B3")
+        self.remove_btn = StyledButton(container=starts_container, text="Remove", variable_name="remove",
+                                       left=380, top=180, normal_color="#dc3545", press_color="#c82333")
         terminal_container = StyledContainer(container=starts_container, variable_name="terminal_container",
                                              left=0, top=500, height=150, width=650, bg_color=True)
         self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
                                  left=10, top=15, width=610, height=100)
-        self.edit_button.do_onclick(self.onclick_edit)
+        self.add_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_add))
+        self.remove_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_remove))
 
         self.starts_container = starts_container
         return starts_container
 
-    def onclick_edit(self, emitter):
-        def print_alternating():
-            for i in range(10):
-                print("zero 3")
-                time.sleep(1)
-        threading.Thread(target=print_alternating, daemon=True).start()
+    def onclick_add(self):
+        webview.create_window(
+            'Settings',
+            'http://127.0.0.1:7000',
+            width=247, height=105,
+            resizable=True,
+            on_top=True
+        )
+
+    def onclick_remove(self):
+        folder = self.user_dd.get_value().replace(" ", "")
+        path = os.path.join(ROOT_DIR, folder)
+        if not os.path.isdir(path):
+            print(f"⚠️ No such folder: {path}\n")
+            return
+        try:
+            shutil.rmtree(path)
+            print(f"🗑️ Removed {path}\n")
+        except Exception as e:
+            print(f"❌ Failed to remove: {e}\n")
+
+    def refresh(self):
+        self.user_dd.empty()
+        self.user_dd.append(self.list_user_folders())
+
+def run_remi():
+    start(starts,
+          address='0.0.0.0', port=9000,
+          start_browser=False,
+          multiple_instance=False,
+          enable_file_cache=False)
 
 if __name__ == "__main__":
-    configuration = {
-        "config_project_name": "starts",
-        "config_address": "0.0.0.0",
-        "config_port": 9000,
-        "config_multiple_instance": False,
-        "config_enable_file_cache": False,
-        "config_start_browser": False,
-        "config_resourcepath": "./res/"
-    }
-    start(starts,
-          address=configuration["config_address"],
-          port=configuration["config_port"],
-          multiple_instance=configuration["config_multiple_instance"],
-          enable_file_cache=configuration["config_enable_file_cache"],
-          start_browser=configuration["config_start_browser"])
+    threading.Thread(target=run_remi, daemon=True).start()
+    webview.create_window(
+        'Main Window',
+        'http://127.0.0.1:9000',
+        width=0, height=0,
+        resizable=True, hidden=True
+    )
+    webview.start()

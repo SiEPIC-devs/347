@@ -36,9 +36,8 @@ class NIR_Measurment_System(App):
         pass
 
     def main(self):
-        return NIR_Measurment_System.construct_ui(self)
+        return self.construct_ui()
 
-    @staticmethod
     def construct_ui(self):
         ip_address = get_local_ip()
         main = StyledContainer(variable_name="main", left=0, top=0, height=715, width=650)
@@ -79,6 +78,7 @@ class NIR_Measurment_System(App):
 
         main.append(main_tab, "main_tab")
         self.main = main
+        print("Welcome To Probe Stage")
         return self.main
 
 

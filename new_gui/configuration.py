@@ -8,7 +8,7 @@ import time
 # ────────── Configuration ──────────
 BASE_DIR = pathlib.Path(__file__).resolve().parent
 PY = sys.executable
-LOG_FILE = BASE_DIR / "log.txt"  # Change to BASE_DIR.parent / "log.txt" to log one level up
+LOG_FILE = BASE_DIR / "log.txt"
 # ───────────────────────────────────
 
 def is_target(p: pathlib.Path) -> bool:
@@ -28,7 +28,7 @@ def start_gui(path: pathlib.Path):
         [PY, str(path)],
         cwd=path.parent,
         stdout=log_fh,
-        stderr=subprocess.STDOUT,
+        #stderr=subprocess.STDOUT,
         env={**os.environ, "REM_MULTI_INST": "1"}
     )
     processes.append(proc)

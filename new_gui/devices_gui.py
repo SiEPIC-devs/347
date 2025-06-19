@@ -131,7 +131,7 @@ class devices(App):
 
         self.selection_container = StyledContainer(
             container=devices_container, variable_name="selection_container",
-            left=10, top=350, height=130, width=625, border=True)
+            left=10, top=350, height=100, width=625, border=True)
         sc = self.selection_container
 
         StyledLabel(container=sc, text="Device Selection Control", variable_name="device_selection_control",
@@ -139,27 +139,26 @@ class devices(App):
                     position="absolute", flex=True, on_line=True)
 
         self.device_id = StyledTextInput(container=sc, variable_name="selection_id",
-                                         left=20, top=70, width=110, height=25)
+                                         left=20, top=55, width=110, height=25)
         self.device_mode = StyledDropDown(container=sc, text=["Any", "TE", "TM"],
                                           variable_name="selection_mode",
-                                          left=160, top=70, width=60, height=25)
+                                          left=160, top=55, width=60, height=25)
         self.device_wvl = StyledDropDown(container=sc, text=["Any", "1550", "1310"],
                                          variable_name="selection_wvl",
-                                         left=230, top=70, width=90, height=25)
+                                         left=230, top=55, width=90, height=25)
         self.device_type = StyledDropDown(container=sc,
                                           text=["Any", "device", "PCM", "ybranch", "cutback"],
                                           variable_name="selection_type",
-                                          left=330, top=70, width=90, height=25)
+                                          left=330, top=55, width=90, height=25)
 
         self.filter_button = StyledButton(container=sc, text="Apply Filter", variable_name="reset_filter",
-                                          left=435, top=70, width=80, height=25)
+                                          left=435, top=55, width=80, height=25)
         self.clear_button = StyledButton(container=sc, text="Clear All", variable_name="clear_all",
-                                         left=525, top=70, width=80, height=25)
+                                         left=525, top=55, width=80, height=25)
         self.all_button = StyledButton(container=sc, text="Select All", variable_name="select_all",
-                                       left=525, top=35, width=80, height=25)
-
+                                       left=525, top=20, width=80, height=25)
         self.confirm_btn = StyledButton(container=sc, text="Confirm", variable_name="confirm",
-                                        left=435, top=35, width=80, height=25)
+                                        left=435, top=20, width=80, height=25)
 
         self.filter_button.do_onclick(lambda *_: self.run_in_thread(self.onclick_filter))
         self.clear_button.do_onclick(lambda *_: self.run_in_thread(self.onclick_clear))
@@ -167,16 +166,16 @@ class devices(App):
         self.confirm_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_confirm))
 
         StyledLabel(container=sc, text="Device ID Contains", variable_name="device_id_contains",
-                    left=22, top=45, width=150, height=25)
+                    left=22, top=30, width=150, height=25)
         StyledLabel(container=sc, text="Mode", variable_name="mode",
-                    left=162, top=45, width=100, height=25)
+                    left=162, top=30, width=100, height=25)
         StyledLabel(container=sc, text="Wavelength", variable_name="wavelength",
-                    left=232, top=45, width=100, height=25)
+                    left=232, top=30, width=100, height=25)
         StyledLabel(container=sc, text="Type", variable_name="type",
-                    left=332, top=45, width=100, height=25)
+                    left=332, top=30, width=100, height=25)
 
         pg = StyledContainer(container=devices_container, variable_name="pagination_container",
-                             left=10, top=485, height=35, width=625)
+                             left=10, top=455, height=35, width=625)
 
         self.prev_btn = StyledButton(container=pg, text="◀ Prev", variable_name="prev_page",
                                      left=0, top=5, width=80, height=25)
@@ -196,7 +195,7 @@ class devices(App):
         self.jump_btn.do_onclick(lambda *_: self.run_in_thread(self.goto_input_page))
 
         terminal_container = StyledContainer(container=devices_container, variable_name="terminal_container",
-                                             left=0, top=530, height=150, width=650, bg_color=True)
+                                             left=0, top=500, height=150, width=650, bg_color=True)
 
         self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
                                  left=10, top=15, width=610, height=100)
@@ -259,7 +258,7 @@ class devices(App):
         self.__set_all_checkboxes(True)
 
     def onclick_confirm(self):
-        selected_idx = sorted(i for i, v in enumerate(self.checkbox_state) if v)
+        selected_idx = sorted(i+1 for i, v in enumerate(self.checkbox_state) if v)
         if not selected_idx:
             print("No device selected — serial not saved.")
             return
@@ -281,7 +280,7 @@ if __name__ == "__main__":
         "config_port": 9003,
         "config_multiple_instance": False,
         "config_enable_file_cache": False,
-        "config_start_browser": True,
+        "config_start_browser": False,
         "config_resourcepath": "./res/"
     }
 
