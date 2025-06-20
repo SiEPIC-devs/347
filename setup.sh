@@ -1,20 +1,33 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "Setting up Python virtual environment..."
+echo "setting up venv for Python 3.9"
 
-# Create virtual environment
-python3 -m venv venv
+# load pyenv
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init - bash)"
+eval "$(pyenv virtualenv-init -)"
 
-# Activate venv (Linux/Mac)
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-    source venv/Scripts/activate
+# check Python 3.9 installed under pyenv
+PY_VERSION=3.9.23
+pyenv install -s $PY_VERSION
+pyenv shell $PY_VERSION
+
+# create venv with pyenv version
+rm -rf venv
+python -m venv venv
+
+# activate
+if [[ "$OSTYPE" =~ msys|cygwin ]]; then
+  source venv/Scripts/activate
 else
-    source venv/bin/activate
+  source venv/bin/activate
 fi
 
-# Upgrade pip and install requirements
 pip install --upgrade pip
 pip install -r requirements.txt
 
-echo "Setup complete! Virtual environment is active."
-echo "To activate later: source venv/bin/activate (Linux)"
+echo "Done! now running $(python --version)"
+echo "To reactivate venv later: source venv/bin/activate"
+
