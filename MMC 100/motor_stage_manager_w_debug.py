@@ -6,7 +6,8 @@ from enum import Enum
 import time
 
 from motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
-from modern_stage import StageControl
+# from modern_stage import StageControl
+from modern.stage_controller import StageControl
 from motor_factory import create_driver
 
 from helper import update_stage_position

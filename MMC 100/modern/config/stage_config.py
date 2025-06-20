@@ -1,54 +1,58 @@
-from multiprocessing import shared_memory
 import json
-from dataclasses import asdict, dataclass, field
-from typing import Dict, Tuple
+import struct
+from multiprocessing import shared_memory
+from dataclasses import dataclass, field, asdict
+from typing import Dict, Tuple, Any
 from modern.hal.motors_hal import AxisType
+
+# SHM and json framing consts
+MAX_PAYLOAD = 2048
+SHM_SIZE = 4 + MAX_PAYLOAD # 4 byte u_int32
+_LEN_STRUCT = struct.Struct("<I") # 4 byte u_int32 length header 
+SHM_NAME = "stage_config" # fixed shared mem name
+
 
 @dataclass
 class StageConfiguration:
-    """Stage config data class that only works for 347"""
+    """Stage config data class to load data to manager"""
     com_port: str = "/dev/ttyUSB0"
     baudrate: int = 38400
     timeout: float = 0.3
-    velocities: Dict[AxisType, float] = None
-    position_limits: Dict[AxisType, Tuple[float,float]] = None
+    velocities: Dict[AxisType, float] = field(default_factory=lambda:
+        {ax:2000.0 for ax in AxisType if ax.name!="ALL"}
+    ) # field dict values
+    position_limits: Dict[AxisType, Tuple[float,float]] = field(default_factory=lambda:
+        {ax:(0.0,10000.0) for ax in AxisType if ax.name!="ALL"}
+    ) # field dict values
 
-    def __post_init__(self):
-        # default maps if none provided
-        if self.velocities is None:
-            self.velocities = { ax:2000.0 for ax in AxisType if ax!=AxisType.ALL }
-        if self.position_limits is None:
-            self.position_limits = { ax:(0.0,10000.0) for ax in AxisType if ax!=AxisType.ALL }
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts self -> JSON-safe dict, turning any AxisType keys
+        into string names.
+        """
+        d = asdict(self)
+        # rewrite the two dicts with string keys
+        d["velocities"] = {ax.name: v for ax, v in self.velocities.items()}
+        d["position_limits"] = {ax.name: list(lim)
+                                 for ax, lim in self.position_limits.items()}
+        return d
 
-    def to_shared_memory(self):
-        """Serialize to JSON and copy into a new SHM block."""
-        js = json.dumps({
-            "com_port": self.com_port,
-            "baudrate": self.baudrate,
-            "timeout": self.timeout,
-            "velocities": {ax.name: v for ax, v in self.velocities.items()},
-            "position_limits": {ax.name: lim for ax, lim in self.position_limits.items()},
-        }).encode("utf-8")
-        shm = shared_memory.SharedMemory(create=True, size=len(js)) # Should contain a name to identify the shared mem block
-        shm.buf[:len(js)] = js
-        return shm, len(js)
-
+    # Need to convert to and from JSON from SHM
     @classmethod
-    def from_shared_memory(cls, name: str, length: int):
-        """Attach to SHM, parse JSON, return a new StageConfiguration."""
-        shm = shared_memory.SharedMemory(name=name)
-        raw = bytes(shm.buf[:length])
-        data = json.loads(raw.decode("utf-8"))
-        # convert back to AxisType keys
-        velocities = {AxisType[ax]: v for ax, v in data["velocities"].items()}
-        limits     = {AxisType[ax]: tuple(lim) for ax, lim in data["position_limits"].items()}
-        cfg = cls(
+    def from_dict(cls, data: Dict[str, Any]) -> "StageConfiguration":
+        """
+        Reconstruct from a dict (e.g. JSON-loaded). Converts string
+        keys back to AxisType.
+        """
+        # extract stage config properties
+        vel = {AxisType[name]: v for name, v in data["velocities"].items()} 
+        lim = {AxisType[name]: tuple(lim)
+               for name, lim in data["position_limits"].items()}
+        
+        return cls(
             com_port=data["com_port"],
             baudrate=data["baudrate"],
             timeout=data["timeout"],
-            velocities=velocities,
-            position_limits=limits
+            velocities=vel,
+            position_limits=lim
         )
-        shm.close() # shm.unlink() has no effect on windows systems
-        return cfg
-    

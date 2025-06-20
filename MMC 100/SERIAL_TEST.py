@@ -78,10 +78,10 @@ async def demo():
         else:
             print("fr failed to home")
 
-    # await home_all()
+    await home_all()
 
-    await mgr.home_limits(x)
-    await mgr.home_limits(y)
+    # await mgr.home_limits(x)
+    # await mgr.home_limits(y)
 
     # Print limits
     # for axis in all:
