@@ -1,7 +1,1 @@
 Welcome To Probe Stage
-✅ Folder created: .\UserData\a
-🗑️ Removed .\UserData\a
-
-🗑️ Removed .\UserData\b
-
-✅ Folder created: .\UserData\a

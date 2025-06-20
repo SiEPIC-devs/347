@@ -15,12 +15,14 @@ class stage_control(App):
         pass
 
     def main(self):
-        return stage_control.construct_ui(self)
+        return self.construct_ui()
 
-    @staticmethod
+    def run_in_thread(self, target, *args) -> None:
+        threading.Thread(target=target, args=args, daemon=True).start()
+
     def construct_ui(self):
         sensor_control_container = StyledContainer(container=None, variable_name="sensor_control_container",
-                                                  left=0, top=0, height=150, width=650)
+                                                   left=0, top=0, height=150, width=650)
         StyledCheckBox(container=sensor_control_container, variable_name="on_box", left=20, top=10,
                        width=10, height=10, position="absolute")
         StyledLabel(container=sensor_control_container, text="On", variable_name="on_label", left=50, top=10,
@@ -46,11 +48,11 @@ class stage_control(App):
         StyledButton(container=sensor_control_container, text="Setting", variable_name="setting_button",
                      font_size=90, left=232, top=15, width=80, height=25, normal_color="#007BFF", press_color="#0056B3")
         sweep_container = StyledContainer(container=sensor_control_container, variable_name="sweep_container",
-                                                   left=330, top=20, height=90, width=300, border=True)
+                                          left=330, top=20, height=90, width=300, border=True)
         StyledButton(container=sweep_container, text="Sweep", variable_name="sweep_button",
                      font_size=90, left=90, top=10, width=82, height=25, normal_color="#007BFF", press_color="#0056B3")
-        StyledButton(container=sweep_container, text="Configure", variable_name="configure_button",
-                     font_size=90, left=200, top=10, width=82, height=25, normal_color="#007BFF", press_color="#0056B3")
+        self.configure = StyledButton(container=sweep_container, text="Configure", variable_name="configure_button",
+                                      font_size=90, left=200, top=10, width=82, height=25, normal_color="#007BFF", press_color="#0056B3")
         StyledLabel(container=sweep_container, text="Range [nm]", variable_name="range_label", left=0, top=50,
                     width=85, height=25, font_size=100, flex=True, justify_content="right", color="#222")
         StyledTextInput(container=sweep_container, variable_name="range_start", left=90, top=50,
@@ -60,8 +62,21 @@ class stage_control(App):
         StyledTextInput(container=sweep_container, variable_name="range_end", left=200, top=50,
                         width=65, height=24, position="absolute")
 
+        self.configure.do_onclick(lambda *_: self.run_in_thread(self.onclick_configure))
+
         self.sensor_control_container = sensor_control_container
         return sensor_control_container
+
+    def onclick_configure(self):
+        local_ip = get_local_ip()
+        webview.create_window(
+            "Setting",
+            f"http://{local_ip}:7001",
+            width=262,
+            height=265,
+            resizable=True,
+            on_top=True,
+        )
 
 
 def get_local_ip():

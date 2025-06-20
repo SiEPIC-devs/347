@@ -11,6 +11,7 @@ import os
 import time
 from tsp import TSPSolver
 import wx
+import webview
 
 
 def fmt(val):
@@ -37,6 +38,26 @@ class testing(App):
     # ------------------------------------------------------------------ REMI HOOKS
     def idle(self):
         self.terminal.terminal_refresh()
+
+        json_path = os.path.join(os.getcwd(), "database", "current_user.json")
+        try:
+            mtime = os.path.getmtime(json_path)
+        except FileNotFoundError:
+            mtime = None
+
+        if mtime != getattr(self, "_user_mtime", None):
+            self._user_mtime = mtime
+            cur_user = ""
+            if mtime is not None:
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        cur_user = json.load(f).get("user", "").strip()
+                except Exception as e:
+                    print(f"[Warn] read json failed: {e}")
+
+            new_path = os.path.join(os.getcwd(), "UserData", cur_user) if cur_user else ""
+            if new_path and new_path != self.save_path_input.get_text():
+                self.save_path_input.set_text(new_path)
 
     def main(self):
         return testing.construct_ui(self)
@@ -252,6 +273,7 @@ class testing(App):
         self.load_btn.do_onclick(lambda *_: self.run_in_thread(self.load_file))
         self.open_btn.do_onclick(lambda *_: self.run_in_thread(self.open_file_path))
         self.save_btn.do_onclick(lambda *_: self.run_in_thread(self.save_file))
+        self.setting_btn.do_onclick(lambda *_: self.run_in_thread(self.laser_sweep_setting))
 
         # -------------------------------------------------- TERMINAL BLOCK
         terminal_container = StyledContainer(container=testing_container, variable_name="terminal_container",
@@ -352,22 +374,50 @@ class testing(App):
         except Exception as e:
             print(f"[Error] Copy failed: {e}\n")
 
+    def laser_sweep_setting(self):
+        local_ip = get_local_ip()
+        webview.create_window(
+            "Setting",
+            f"http://{local_ip}:7001",
+            width=262,
+            height=265,
+            resizable=True,
+            on_top=True,
+        )
+
+def run_remi():
+    start(
+        testing,
+        address="0.0.0.0",
+        port=9004,
+        start_browser=False,
+        multiple_instance=False,
+        enable_file_cache=False,
+    )
+
+def get_local_ip():
+    """Automatically detect local LAN IP address"""
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # Fake connect to get route IP
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"  # fallback
 
 
     # --------------------------------------------------------------------------- MAIN
 if __name__ == "__main__":
-    configuration = {
-        "config_project_name": "testing",
-        "config_address": "0.0.0.0",
-        "config_port": 9004,
-        "config_multiple_instance": False,
-        "config_enable_file_cache": False,
-        "config_start_browser": False,
-        "config_resourcepath": "./res/"
-    }
-    start(testing,
-          address=configuration["config_address"],
-          port=configuration["config_port"],
-          multiple_instance=configuration["config_multiple_instance"],
-          enable_file_cache=configuration["config_enable_file_cache"],
-          start_browser=configuration["config_start_browser"])
+    threading.Thread(target=run_remi, daemon=True).start()
+    local_ip = get_local_ip()
+    webview.create_window(
+        "Main Window",
+        f"http://{local_ip}:9004",
+        width=0,
+        height=0,
+        resizable=True,
+        hidden=True,
+    )
+    webview.start()

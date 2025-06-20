@@ -240,7 +240,7 @@ class StyledTextInput(TextInput):
             "border": "1px solid #aaa",
             "border-radius": "4px",
             "box-shadow": "inset 0 1px 3px rgba(0,0,0,0.1)",
-            "background-color": "#ffffff",
+            "background-color": "#fafafa",
             "font-size": "15px",
             "color": "#333",
             "line-height": f"{height}px",
