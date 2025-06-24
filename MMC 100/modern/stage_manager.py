@@ -6,12 +6,15 @@ from enum import Enum
 import time
 from time import monotonic
 
-from motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
-from stage_controller import StageControl
-from motor_factory import create_driver
-
-from helper import update_stage_position
-
+# local API calls
+from modern.hal.motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
+# from modern.stage_controller import StageControl
+from modern_stage import StageControl
+from modern.hal.stage_factory import create_driver
+from modern.config.stage_position import *
+from modern.config.stage_config import *
+from modern.utils.update_stage import update_stage_position
+from modern.utils.shared_memory import *
 
 """
 Made by: Cameron Basara, 6/17/2025
@@ -44,12 +47,62 @@ STAGE_LIST = [347] # placeholder
 
 
 class StageManager:
-    def __init__(self, config: StageConfiguration):
-        self.config = config
+    def __init__(self, profile_config: StageConfiguration, create_shm: bool = True):
+        # self.config = config
         self.motors: Dict[AxisType, StageControl] = {}
         self._event_callbacks: List[Callable[[MotorEvent], None]] = []
         self._last_positions: Dict[AxisType, float] = {}
+        self._homed_axes: Dict[AxisType, bool] = {axis: False for axis in AxisType if axis != AxisType.ALL}
+        self._changed_axes: List[AxisType] = [] # cheeky changed axis queue
 
+        if create_shm:
+            # Shared-memory configuration and stage positioning
+            self.shm_position, self.raw_position = create_shared_stage_position()
+            self.shm_config = create_shared_stage_config() # create
+            write_shared_stage_config(self.shm_config, profile_config) # load preset
+        else:
+            # If an shm has been created, simply access the open memory block
+            self.shm_position, self.raw_position = open_shared_stage_position()
+            self.shm_config = open_shared_stage_config()
+
+        # Read config from shared mem for consistency
+        self.config = read_shared_stage_config(self.shm_config)
+        self.shared_stage_position = StagePosition(shared_struct=self.raw_position)
+
+        # Background loops
+        self._tasks = []
+        loop = asyncio.get_event_loop()
+        self._tasks.append(loop.create_task(self._position_poll_loop()))
+
+    # Helper decorator to ensure SHM is properly cleaned
+    def __del__(self):
+        """Cleanup shared memory on destruction"""
+        try:
+            # Cancel background tassk
+            for t in self._tasks:
+                t.cancel()
+        except Exception as e:
+            logger.error(f"Warning: Error during task cleanup: {e}")
+            
+        try:
+            if hasattr(self, 'shm_position'):
+                # delete instances of stage pos and struct
+                del self.shared_stage_position
+                del self.raw_position 
+                self.shm_position.close() # close shm access
+                # NEED TO UNLINK IN MAIN PROCESS
+                # safe_shm_shutdown(self.shm_position, self.raw_position)
+            if hasattr(self, 'shm_config'):
+                # delete configuration instance
+                del self.config
+                self.shm_config.close() # close shm access
+                # NEED TO UNLINK IN MAIN PROCESS
+                # safe_shm_shutdown(self.shm_config)
+
+        except Exception as e:
+            logger.error(f"Warning: Error during SHM cleanup: {e}")
+        
+        
     # Helper decorator to ensure axis is initialized
     def requires_motor(func):
         """Before method runs, checks is this an axis in self.motors"""
@@ -89,6 +142,104 @@ class StageManager:
             except Exception as e:
                 print(f"[{event.axis.name}] Error in manager-level callback: {e}")
 
+    # Configuration and helpers
+    def _check_changes(self, cfg: StageConfiguration) -> bool:
+        """Updates self._changed_axes"""
+        # Check for static changes, if these change we have to reinitialize the stage
+        scalar_fields = ['com_port', 'baudrate', 'timeout', 'position_tolerance', 
+                     'status_poll_interval', 'move_timeout']
+        for field_name in scalar_fields:
+            old_val = getattr(self.config, field_name)
+            new_val = getattr(cfg, field_name)
+            if old_val != new_val:
+                return True
+            
+        new_attrs = cfg.get_axis_attributes()
+        old_attrs = self.config.get_axis_attributes()
+        
+        for axis in old_attrs:
+            if old_attrs[axis] != new_attrs.get(axis):
+                self._changed_axes.append(axis)
+        
+        return False
+
+    async def reload_config(self) -> StageConfiguration:
+        """Reload config from shared memory"""
+        try:
+            cfg = read_shared_stage_config(self.shm_config)
+            if cfg == self.config:
+                return self.config
+            else:
+                full = self._check_changes(cfg)
+                if full:
+                    # If a static param changes, reinitialize stage
+                    self.config = cfg
+                    ok = await self.initialize()
+                    return ok
+                
+                self.config = cfg
+                ok = await self._apply_config_changes()
+                return ok
+        except Exception as e:
+            logger.error(f"Error reading config: {e}")
+            raise
+    
+    async def update_config(self, new_config: StageConfiguration) -> None:
+        """Update configuration in shared memory"""
+        try:
+            write_shared_stage_config(self.shm_config, new_config)
+            if new_config == self.config:
+                return None
+            else:
+                full = self._check_changes(new_config)
+                if full:
+                    # If a static param changes, reinitialize stage
+                    self.config = new_config
+                    await self.initialize()
+
+                self.config = new_config
+                await self._apply_config_changes()
+        except Exception as e:
+            logger.error(f"Error updating config: {e}")
+            raise
+    
+    async def _apply_config_changes(self):
+        """Apply config changes to stage instance"""
+        # Succesful initialization
+        results = {}
+
+        for axis in self._changed_axes:
+            # Retrive config
+            cfg = self.config
+
+            # Instantiate motors through the the factory
+            driver_key = cfg.driver_types[axis]
+            params = dict(
+                axis=axis,
+                com_port=cfg.com_port,
+                baudrate=cfg.baudrate,
+                timeout=cfg.timeout,
+                velocity=cfg.velocities[axis],
+                acceleration=cfg.accelerations[axis],
+                position_limits=cfg.position_limits[axis],
+                position_tolerance=cfg.position_tolerance,
+                status_poll_interval=cfg.status_poll_interval
+            )
+            motor = create_driver(driver_key, **params)
+
+            # Catch exceptions
+            ok = await self._safe_execute(f"connect {axis.name}", motor.connect()) # motor connects from abstracted stage driver
+            if ok:
+                self.motors[axis] = motor
+                self._last_positions[axis] = 0.0
+                motor.add_event_callback(self._handle_stage_event)
+                
+            results[axis] = ok
+        
+        self._changed_axes.clear()
+        return all(results.values())
+
+        
     @update_stage_position
     async def initialize(self, axes):
         """
@@ -163,6 +314,30 @@ class StageManager:
         ok = await self._safe_execute(f"home {axis.name} status", self.motors[axis]._wait_for_home_completion())
         return ok
     
+    @update_stage_position
+    async def update_params(self) -> bool:
+        """
+        Updates params of a stage from shared memory
+        """
+        # Check if homed
+        for axis, motor in self.motors.items():
+            if not self.motors[axis]._is_homed:
+                logger.error(f"{axis.name} isn't homed - aborting load of params")
+                break
+
+        # Intialize params
+        cfg = self.config
+        
+        # Apply profiles
+        for axis, target in cfg.initial_positions.items():
+            print(f"axis: {axis.name} target: {target}")
+            ok = await self._safe_execute(f"move_absolute {axis.name}",
+                    self.motors[axis].move_absolute(target, velocity=cfg.velocities[axis], wait_for_completion=True))
+            if not ok:
+                return ok
+        
+        return True
+
     @update_stage_position
     async def load_params(self) -> bool:
         """
