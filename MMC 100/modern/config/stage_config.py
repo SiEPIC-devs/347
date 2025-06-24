@@ -3,6 +3,7 @@ import struct
 from multiprocessing import shared_memory
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Tuple, Any
+
 from modern.hal.motors_hal import AxisType
 
 @dataclass

@@ -78,12 +78,12 @@ class StageManager:
     def __del__(self):
         """Cleanup shared memory on destruction"""
         try:
-            # Cancel background tassk
+            # Cancel background tasks
             for t in self._tasks:
                 t.cancel()
         except Exception as e:
             logger.error(f"Warning: Error during task cleanup: {e}")
-            
+
         try:
             if hasattr(self, 'shm_position'):
                 # delete instances of stage pos and struct
