@@ -265,3 +265,48 @@ class StyledImageBox(Image):
         self.variable_name = variable_name
         if container:
             container.append(self, self.variable_name)
+
+class StyledSpinBox(SpinBox):
+    def __init__(self, variable_name, left, top,
+                 width=150, height=30, value=0,
+                 step=1, min_value=None, max_value=None,
+                 position="absolute", percent=False,
+                 container=None):
+        super().__init__()
+
+        apply_common_style(self, left, top, width, height, position, percent)
+
+        self.set_value = str(value)
+        self.attr_step = str(step)
+        if min_value is not None:
+            self.attr_min = str(min_value)
+        if max_value is not None:
+            self.attr_max = str(max_value)
+
+        self.variable_name = variable_name
+
+        self.style.update({
+            "padding-top": "0px",
+            "padding-right": "0px",
+            "padding-bottom": "0px",
+            "padding-left": "15px",
+            "border": "1px solid #aaa",
+            "border-radius": "4px",
+            "box-shadow": "inset 0 1px 3px rgba(0,0,0,0.1)",
+            "background-color": "#fafafa",
+            "font-size": "15px",
+            "color": "#333",
+            "line-height": f"{height}px",
+            "text-align": "center",
+            "display": "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "white-space": "nowrap",
+            "overflow": "hidden",
+            "overflow-x": "hidden",
+            "overflow-y": "hidden",
+            "resize": "none"
+        })
+
+        if container:
+            container.append(self, self.variable_name)

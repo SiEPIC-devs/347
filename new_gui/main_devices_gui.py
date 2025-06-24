@@ -1,7 +1,7 @@
 from remi.gui import *
-from myguilab import *
+from lab_gui import *
 from remi import start, App
-import coordinates
+import lab_coordinates
 import threading
 import math
 import json
@@ -20,7 +20,7 @@ class devices(App):
     def __init__(self, *args, **kwargs):
         self.timestamp = -1
 
-        self.gds = coordinates.coordinates(read_file=False, name="./database/coordinates.json")
+        self.gds = lab_coordinates.coordinates(read_file=False, name="./database/coordinates.json")
         self.number = self.gds.listdeviceparam("number")
         self.coordinate = self.gds.listdeviceparam("coordinate")
         self.polarization = self.gds.listdeviceparam("polarization")
@@ -151,19 +151,14 @@ class devices(App):
                                           variable_name="selection_type",
                                           left=330, top=55, width=90, height=25)
 
-        self.filter_button = StyledButton(container=sc, text="Apply Filter", variable_name="reset_filter",
+        self.filter_btn = StyledButton(container=sc, text="Apply Filter", variable_name="reset_filter",
                                           left=435, top=55, width=80, height=25)
-        self.clear_button = StyledButton(container=sc, text="Clear All", variable_name="clear_all",
+        self.clear_btn = StyledButton(container=sc, text="Clear All", variable_name="clear_all",
                                          left=525, top=55, width=80, height=25)
-        self.all_button = StyledButton(container=sc, text="Select All", variable_name="select_all",
+        self.all_btn = StyledButton(container=sc, text="Select All", variable_name="select_all",
                                        left=525, top=20, width=80, height=25)
         self.confirm_btn = StyledButton(container=sc, text="Confirm", variable_name="confirm",
                                         left=435, top=20, width=80, height=25)
-
-        self.filter_button.do_onclick(lambda *_: self.run_in_thread(self.onclick_filter))
-        self.clear_button.do_onclick(lambda *_: self.run_in_thread(self.onclick_clear))
-        self.all_button.do_onclick(lambda *_: self.run_in_thread(self.onclick_all))
-        self.confirm_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_confirm))
 
         StyledLabel(container=sc, text="Device ID Contains", variable_name="device_id_contains",
                     left=22, top=30, width=150, height=25)
@@ -189,16 +184,18 @@ class devices(App):
                                      left=180, top=5, width=40, height=25)
         self.next_btn = StyledButton(container=pg, text="Next ▶", variable_name="next_page",
                                      left=235, top=5, width=80, height=25)
+        terminal_container = StyledContainer(container=devices_container, variable_name="terminal_container",
+                                             left=0, top=500, height=150, width=650, bg_color=True)
+        self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
+                                 left=10, top=15, width=610, height=100)
 
         self.prev_btn.do_onclick(lambda *_: self.run_in_thread(self.goto_prev_page))
         self.next_btn.do_onclick(lambda *_: self.run_in_thread(self.goto_next_page))
         self.jump_btn.do_onclick(lambda *_: self.run_in_thread(self.goto_input_page))
-
-        terminal_container = StyledContainer(container=devices_container, variable_name="terminal_container",
-                                             left=0, top=500, height=150, width=650, bg_color=True)
-
-        self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
-                                 left=10, top=15, width=610, height=100)
+        self.filter_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_filter))
+        self.clear_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_clear))
+        self.all_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_all))
+        self.confirm_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_confirm))
 
         self.devices_container = devices_container
         self.build_table_rows()

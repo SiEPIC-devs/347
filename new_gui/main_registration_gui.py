@@ -1,8 +1,8 @@
 from remi.gui import *
 from remi import start, App
 import os
-from myguilab import *
-import coordinates
+from lab_gui import *
+import lab_coordinates
 import glob
 import threading
 
@@ -26,7 +26,7 @@ class registration(App):
         self.terminal.terminal_refresh()
 
     def main(self):
-        return registration.construct_ui(self)
+        return self.construct_ui()
 
     # Utility method to run any target in a background thread
     def run_in_thread(self, target, *args):
@@ -141,7 +141,7 @@ class registration(App):
         except:
             pass
 
-        self.gds = coordinates.coordinates(("./res/" + filename), read_file=True,
+        self.gds = lab_coordinates.coordinates(("./res/" + filename), read_file=True,
                                            name="./database/coordinates.json")
         self.number = self.gds.listdeviceparam("number")
         self.coordinate = self.gds.listdeviceparam("coordinate")

@@ -5,7 +5,7 @@
 # Compiled at: 2023-02-14 23:59:31
 # Size of source mod 2**32: 11801 bytes
 
-from myguilab import *
+from lab_gui import *
 from remi.gui import *
 from remi import start, App
 import threading

@@ -17,7 +17,7 @@ from remi.gui import *
 from remi import App, start
 
 # NOTE: external helper modules (keep as-is)
-from myguilab import *
+from lab_gui import *
 
 # ──────────────────────────────────────────
 ROOT_DIR = ".\\UserData"

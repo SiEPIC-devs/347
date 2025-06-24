@@ -1,15 +1,15 @@
 import shutil
 
 from remi.gui import *
-from myguilab import *
+from lab_gui import *
 from remi import start, App
-import coordinates
+import lab_coordinates
 import threading
 import math
 import json
 import os
 import time
-from tsp import TSPSolver
+from lab_tsp import TSPSolver
 import wx
 import webview
 
@@ -326,7 +326,7 @@ class testing(App):
             with open(file_path, "r") as f:
                 self.serial_list = json.load(f)
         self.timestamp = -1
-        self.gds = coordinates.coordinates(read_file=False, name="./database/coordinates.json")
+        self.gds = lab_coordinates.coordinates(read_file=False, name="./database/coordinates.json")
         self.number = self.gds.listdeviceparam("number")
         self.coordinate = self.gds.listdeviceparam("coordinate")
         self.polarization = self.gds.listdeviceparam("polarization")
@@ -380,7 +380,7 @@ class testing(App):
             "Setting",
             f"http://{local_ip}:7001",
             width=262,
-            height=265,
+            height=305,
             resizable=True,
             on_top=True,
         )
