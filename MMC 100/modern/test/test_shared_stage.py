@@ -50,26 +50,26 @@ def reader_config():
     shm.close()
 
 if __name__ == "__main__":
-    # # 1) Stage-position setup & test
-    # shm_pos, raw_pos = create_shared_stage_position()
-    # sp0 = StagePosition(shared_struct=raw_pos)
-    # print(f"[MainPos] Initial X={sp0.x.position:.1f}, Homed={sp0.x.is_homed}")
+    # 1) Stage-position setup & test
+    shm_pos, raw_pos = create_shared_stage_position()
+    sp0 = StagePosition(shared_struct=raw_pos)
+    print(f"[MainPos] Initial X={sp0.x}")
     
-    # # Clean up the initial StagePosition object
-    # del sp0
+    # Clean up the initial StagePosition object
+    del sp0
     
-    # pw = Process(target=writer_pos)
-    # pw.start(); pw.join()
-    # pr = Process(target=reader_pos)
-    # pr.start(); pr.join()
+    pw = Process(target=writer_pos)
+    pw.start(); pw.join()
+    pr = Process(target=reader_pos)
+    pr.start(); pr.join()
     
-    # # teardown position SHM - main process handles unlink
-    # del raw_pos
-    # import gc
-    # gc.collect()
-    # shm_pos.close()
-    # shm_pos.unlink()  # Only the creator should unlink
-    # print("[MainPos] Shared position memory unlinked.")
+    # teardown position SHM - main process handles unlink
+    del raw_pos
+    import gc
+    gc.collect()
+    shm_pos.close()
+    shm_pos.unlink()  # Only the creator should unlink
+    print("[MainPos] Shared position memory unlinked.")
     
     # 2) Stage-config setup & test
     shm_cfg = create_shared_stage_config()
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         print(f"[MainCfg] Default baudrate={initial.baudrate}, X_vel={initial.velocities[AxisType.X]:.1f}")
     except BufferError:
         print("[MainCfg] No config present yet.")
-        
+     
     pwc = Process(target=writer_config)
     pwc.start(); pwc.join()
     prc = Process(target=reader_config)

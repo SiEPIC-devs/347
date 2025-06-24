@@ -22,11 +22,7 @@ Made by: Cameron Basara, 6/17/2025
 Stage manager, intended to interface with the GUI to give high level commands to the modern stage
 
 TODO:
-    Improve config params loading, to consider outside entries
-        yaml -> helper functions -> internal storage using dataclasses -> outputs, measurement information
-    Clean up existing code, remove gunk, remove duplicates
     Ensure that the other stages behave nicely. Concerned about movement patterns : will they be different logic at different stages?
-    Change information access points, loading yaml etcs. Physical ways to store information for next use cases. 
     Implement cominterface ? may not be useful
     Implement interactions with other hardware devices: lasers, detectors, TECs, Cams
     Implement interactions with gui
@@ -71,38 +67,119 @@ class StageManager:
 
         # Background loops
         self._tasks = []
-        loop = asyncio.get_event_loop()
-        self._tasks.append(loop.create_task(self._position_poll_loop()))
+
+    # Async helpers
+    async def __aenter__(self):
+        """Async context manager entry"""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Proper async cleanup"""
+        await self.cleanup()
 
     # Helper decorator to ensure SHM is properly cleaned
-    def __del__(self):
-        """Cleanup shared memory on destruction"""
-        try:
-            # Cancel background tasks
-            for t in self._tasks:
-                t.cancel()
-        except Exception as e:
-            logger.error(f"Warning: Error during task cleanup: {e}")
+    async def cleanup(self):
+        """Cleanup method for tasks and shm"""
+        logger.info("Starting Manager cleanup")
 
+        # Cancel Background tasks first
+        cleanup_tasks = []
+        for task in self._tasks:
+            if not task.done():
+                task.cancel()
+                cleanup_tasks.append(task)
+        
+        # Wait for tasks to cancel
+        if cleanup_tasks:
+            try:
+                await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+            except Exception as e:
+                logger.warning(f"Task cleanup had exceptions: {e}")
+        
+        # Disconnect motors
+        await self.disconnect_all()
+
+        # Cleanup SHM (BUT don't unlink, that is the main process responsibility)
         try:
-            if hasattr(self, 'shm_position'):
-                # delete instances of stage pos and struct
+            # Destroy instances of shared memory access buffers
+            if hasattr(self, 'shared_stage_position'):
                 del self.shared_stage_position
-                del self.raw_position 
-                self.shm_position.close() # close shm access
-                # NEED TO UNLINK IN MAIN PROCESS
-                # safe_shm_shutdown(self.shm_position, self.raw_position)
-            if hasattr(self, 'shm_config'):
-                # delete configuration instance
+            if hasattr(self, 'raw_position'):
+                del self.raw_position
+            if hasattr(self, 'config'):
                 del self.config
-                self.shm_config.close() # close shm access
-                # NEED TO UNLINK IN MAIN PROCESS
-                # safe_shm_shutdown(self.shm_config)
 
+            # Close shm
+            if hasattr(self, 'shm_position'):
+                self.shm_position.close()
+            if hasattr(self, 'shm_config'):
+                self.shm_config.close()
+        
         except Exception as e:
-            logger.error(f"Warning: Error during SHM cleanup: {e}")
+            logger.error(f"Shared memory cleanup error: {e}")
         
+        logger.info("Manager cleanup complete")
+
+    # Position poll loop
+    async def _position_poll_loop(self):
+        """Background loop to poll motor positions and update shared memory"""
+        logger.info("Starting position poll loop")
+
+        while True:
+            try:
+                # Don't poll if no motors connected
+                if not self.motors:
+                    await asyncio.sleep(1.0)
+                    continue
+
+                # Poll each motor position
+                for axis, motor in self.motors.items():
+                    try:
+                        position = await motor.get_position()
+                        if position is not None:
+                            # Update local cache
+                            self._last_positions[axis] = position.actual
+
+                            # Updated shared mem
+                            setattr(self.shared_stage_position, axis.name.lower(), position.actual) # eg self.shared_stage_position.x = position.actual
+
+                            # Check for positional drift
+                            exp = self._last_positions.get(axis, 0.0)
+                            if abs(position.actual - exp) > self.config.position_tolerance:
+                                logger.warning(f"Positional drift on {axis.name}: expected: {exp:.3f} actual: {position.actual:.3f}")
+                    
+                    except Exception as e:
+                        logger.debug(f"Failed to poll {axis.name} position: {e}")
+                
+                # Poll at configured interval
+                await asyncio.sleep(self.config.status_poll_interval)
+            
+            except asyncio.CancelledError:
+                logger.info("Position poll loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Unexpected error in position poll loop: {e}")
+                await asyncio.sleep(1.0)  # Prevent tight error loop
+    
+    async def start_brackground_tasks(self):
+        """Start all background tasks call after initialization"""
+        if self._tasks:
+            logger.warning("Background tasks already running")
+            return
         
+        try:
+            # Start pos polling
+            self._tasks.append(
+                asyncio.create_task(self._position_poll_loop(), name="position_poll")
+            )
+
+            # Add more when needed
+            logger.info(f"started {len(self._tasks) } bgtasks")
+        
+        except Exception as e:
+            logger.error(f"Failed to start background tasks: {e}")
+            raise
+
     # Helper decorator to ensure axis is initialized
     def requires_motor(func):
         """Before method runs, checks is this an axis in self.motors"""
@@ -111,6 +188,9 @@ class StageManager:
                 logger.error(f"{axis.name} not initialized")
                 return False
             return await func(self, axis, *args, **kwargs)
+        # For improved debugging 
+        wrapper.__name__ = func.__name__
+        wrapper.__doc__ = func.__doc__
         return wrapper
 
     # Helper to catch exceptions
@@ -145,6 +225,9 @@ class StageManager:
     # Configuration and helpers
     def _check_changes(self, cfg: StageConfiguration) -> bool:
         """Updates self._changed_axes"""
+        # Clear previous changed axis
+        self._changed_axes.clear()
+
         # Check for static changes, if these change we have to reinitialize the stage
         scalar_fields = ['com_port', 'baudrate', 'timeout', 'position_tolerance', 
                      'status_poll_interval', 'move_timeout']
@@ -157,8 +240,19 @@ class StageManager:
         new_attrs = cfg.get_axis_attributes()
         old_attrs = self.config.get_axis_attributes()
         
+        # Check for removed axes
         for axis in old_attrs:
-            if old_attrs[axis] != new_attrs.get(axis):
+            if axis not in new_attrs:
+                logger.info(f"Axis {axis.name} removed from config")
+                self._changed_axes.append(axis)
+        
+        # Check for added or modified axes
+        for axis in new_attrs:
+            if axis not in old_attrs:
+                logger.info(f"Axis {axis.name} added to config")
+                self._changed_axes.append(axis)
+            elif old_attrs[axis] != new_attrs[axis]:
+                logger.info(f"Axis {axis.name} configuration changed")
                 self._changed_axes.append(axis)
         
         return False
@@ -277,42 +371,6 @@ class StageManager:
             results[axis] = ok
 
         return all(results.values())
-
-    @update_stage_position
-    @requires_motor
-    async def home_axis(self, axis: AxisType, direction: int = 0) -> bool:
-        ok = await self._safe_execute(f"home {axis.name}", self.motors[axis].home(direction))
-       
-        # # Wait for home to complete
-        # while self.motors[axis]._move_in_progress:
-        #     await asyncio.sleep(0.1)
-        
-        if ok:
-            self._last_positions[axis] = 0.0
-        return ok
-    
-    @update_stage_position
-    @requires_motor
-    async def home_limits(self, axis: AxisType) -> bool:
-        if (axis == AxisType.Z):
-            # Ensure safe homing of Z axis
-            aok = await self._safe_execute(f"", self.motors[AxisType.Y].move_absolute(
-                self.config.position_limits[AxisType.Y][1],
-                wait_for_completion=True
-            ))
-            if aok:
-                pass
-            else:
-                return False
-        ok, pos_lims = await self._safe_execute(f"home {axis.name} limits", self.motors[axis].home_limits())
-        if ok:
-            self.config.position_limits[axis] = pos_lims
-        return ok
-
-    @requires_motor
-    async def wait_for_home_completion(self, axis: AxisType) -> bool:
-        ok = await self._safe_execute(f"home {axis.name} status", self.motors[axis]._wait_for_home_completion())
-        return ok
     
     @update_stage_position
     async def update_params(self) -> bool:
@@ -362,6 +420,68 @@ class StageManager:
         
         return True
     
+    # HOMING
+    @requires_motor
+    async def _update_homing_state(self, axis: AxisType, is_homed: bool):
+        """Internal tool to update homing state tracking"""
+        # Update internal cache
+        self._homed_axes[axis] = is_homed
+
+        # Update shared memory
+        self.set_homed(axis)
+
+        # Emit homing event
+        event = MotorEvent(
+            axis=axis,
+            event_type=MotorEventType.HOMED if is_homed else MotorEventType.ERROR_OCCURRED,
+            timestamp=monotonic(),
+            data={'homed': is_homed}
+        )
+        self._handle_stage_event(event)
+
+    @update_stage_position
+    @requires_motor
+    async def home_axis(self, axis: AxisType, direction: int = 0) -> bool:
+        ok = await self._safe_execute(f"home {axis.name}", self.motors[axis].home(direction))
+       
+        # # Wait for home to complete
+        # while self.motors[axis]._move_in_progress:
+        #     await asyncio.sleep(0.1)
+        
+        if ok:
+            self._last_positions[axis] = 0.0
+            await self._update_homing_state(axis, True)
+        else:
+            await self._update_homing_state(axis, False)
+        return ok
+    
+    @update_stage_position
+    @requires_motor
+    async def home_limits(self, axis: AxisType) -> bool:
+        if (axis == AxisType.Z):
+            # Ensure safe homing of Z axis
+            aok = await self._safe_execute(f"", self.motors[AxisType.Y].move_absolute(
+                self.config.position_limits[AxisType.Y][1],
+                wait_for_completion=True
+            ))
+            if aok:
+                pass
+            else:
+                return False
+        ok, pos_lims = await self._safe_execute(f"home {axis.name} limits", self.motors[axis].home_limits())
+        if ok:
+            self.config.position_limits[axis] = pos_lims
+            await self._update_homing_state(axis, True)
+        else:
+            await self._update_homing_state(axis, False)            
+        return ok
+
+    @requires_motor
+    async def wait_for_home_completion(self, axis: AxisType) -> bool:
+        ok = await self._safe_execute(f"home {axis.name} status", self.motors[axis]._wait_for_home_completion())
+        return ok
+    
+    # MOVEMENT
     @update_stage_position
     @requires_motor
     async def move_single_axis(self, axis: AxisType, position: float,

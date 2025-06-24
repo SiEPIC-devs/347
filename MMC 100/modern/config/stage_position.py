@@ -148,6 +148,14 @@ class StagePosition:
 
         return self.get_struct()
 
+    def __setattr__(self, name, value):
+        try:
+            axis = AxisType[name.upper()]
+        except KeyError:
+            return super().__setattr__(name, value)
+        # caught one of ['X','Y','Z','ROTATION_FIBER','ROTATION_CHIP']
+        self.set_positions(axis, float(value))
+        self._struct.timestamp = monotonic()
         
     @property
     def x(self) -> AxisPosition:
@@ -171,4 +179,7 @@ class StagePosition:
 
 sp = StagePosition()
 # print(sp.get_struct())
+print(sp.x)
+setattr(sp, "x", 11.1)
+sp.set_homed(AxisType.X)
 print(sp.x)
