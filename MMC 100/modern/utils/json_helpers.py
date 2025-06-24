@@ -9,4 +9,3 @@ def save_config(cfg: StageConfiguration, path: str) -> None:
     """
     Save a config in json to a specific path
     """
-    
