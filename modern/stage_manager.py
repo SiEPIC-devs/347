@@ -136,7 +136,9 @@ class StageManager:
                 # Poll each motor position
                 for axis, motor in motors_snapshot.items():
                     try:
+                        logger.debug(f"Polling {motor}.{axis}")
                         position = await motor.get_position()
+                        logger.debug(f"Position: {position}")
                         if position is not None:
                             logger.info(f"Testing position: {position.actual:.3f}")
                             # Update local cache
@@ -460,7 +462,7 @@ class StageManager:
     
     @update_stage_position
     @requires_motor
-    async def home_limits(self, axis: AxisType) -> bool:
+    async def git(self, axis: AxisType) -> bool:
         if (axis == AxisType.Z):
             # Ensure safe homing of Z axis
             aok = await self._safe_execute(f"", self.motors[AxisType.Y].move_absolute(
