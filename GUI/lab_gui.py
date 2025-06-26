@@ -1,6 +1,13 @@
 from remi.gui import *
 import os
 import time
+from multiprocessing import Process
+from time import sleep, monotonic
+from modern.config.stage_position import *
+from modern.config.stage_config import *
+from modern.utils.shared_memory import *
+from modern.hal.motors_hal import AxisType
+import gc
 
 def apply_common_style(widget, left, top, width, height, position="absolute", percent=False):
     widget.css_position = position
@@ -276,7 +283,7 @@ class StyledSpinBox(SpinBox):
 
         apply_common_style(self, left, top, width, height, position, percent)
 
-        self.set_value = str(value)
+        self.set_value(str(value))
         self.attr_step = str(step)
         if min_value is not None:
             self.attr_min = str(min_value)
@@ -310,3 +317,39 @@ class StyledSpinBox(SpinBox):
 
         if container:
             container.append(self, self.variable_name)
+
+class Memory():
+    def __init__(self):
+        self.x_pos = 0
+        self.y_pos = 0
+        self.z_pos = 0
+        self.fr_pos = 0
+        self.cp_pos = 0
+
+    def writer_pos(self):
+        shm, raw = open_shared_stage_position()
+        sp = StagePosition(shared_struct=raw)
+        # write into shared memory
+        sp.set_positions(AxisType.X, 123.456)
+        sp.set_homed(AxisType.X)
+
+        # Clean - explicitly delete the object first
+        del sp
+        del raw
+        shm.close()
+
+    def reader_pos(self):
+        # give writer a moment
+        sleep(0.1)
+        shm, raw = open_shared_stage_position("stage_position")
+        sp = StagePosition(shared_struct=raw)
+        self.x_pos = sp.x.position
+        self.y_pos = sp.y.position
+        self.z_pos = sp.z.position
+        self.fr_pos = sp.fr.position
+        self.cp_pos = sp.cp.position
+
+        # Clean - explicitly delete the object first
+        del sp
+        del raw
+        shm.close()

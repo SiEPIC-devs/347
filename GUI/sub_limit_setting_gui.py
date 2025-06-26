@@ -1,10 +1,10 @@
 from lab_gui import *
 from remi import start, App
 
-class add_btn(App):
+class limit(App):
     def __init__(self, *args, **kwargs):
         if "editing_mode" not in kwargs:
-            super(add_btn, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
+            super(limit, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
     def idle(self):
         pass
@@ -62,7 +62,7 @@ class add_btn(App):
 
 if __name__ == "__main__":
     configuration = {
-        "config_project_name": "add_btn",
+        "config_project_name": "limit",
         "config_address": "0.0.0.0",
         "config_port": 7002,
         "config_multiple_instance": False,
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         "config_start_browser": False,
         "config_resourcepath": "./res/"
     }
-    start(add_btn,
+    start(limit,
           address=configuration["config_address"],
           port=configuration["config_port"],
           multiple_instance=configuration["config_multiple_instance"],

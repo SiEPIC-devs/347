@@ -1,24 +1,37 @@
 from lab_gui import *
 from remi.gui import *
 from remi import start, App
-import threading
-import webview
-import signal
-import socket
-import time
-import lab_coordinates
-import glob
+import threading, webview, signal, lab_coordinates, asyncio
+from modern.stage_manager import StageManager
+from modern.config.stage_config import StageConfiguration
 
 filename = "coordinates.json"
 
 class stage_control(App):
     def __init__(self, *args, **kwargs):
-        self.timestamp = -1
+        self.memory = None
+        self.configure = None
+        self.stage_manager = None
+        self.x_position_lb = None
+        self.y_position_lb = None
+        self.z_position_lb = None
+        self.chip_position_lb = None
+        self.fiber_position_lb = None
         if "editing_mode" not in kwargs:
             super(stage_control, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
     def idle(self):
-        pass
+        self.memory.reader_pos()
+        if self.memory.x_pos != float(self.x_position_lb.get_text()):
+            self.x_position_lb.set_text(str(self.memory.x_pos))
+        if self.memory.y_pos != float(self.y_position_lb.get_text()):
+            self.y_position_lb.set_text(str(self.memory.y_pos))
+        if self.memory.z_pos != float(self.z_position_lb.get_text()):
+            self.z_position_lb.set_text(str(self.memory.z_pos))
+        if self.memory.cp_pos != float(self.chip_position_lb.get_text()):
+            self.chip_position_lb.set_text(str(self.memory.cp_pos))
+        if self.memory.fr_pos != float(self.fiber_position_lb.get_text()):
+            self.fiber_position_lb.set_text(str(self.memory.fr_pos))
 
     def main(self):
         return self.construct_ui()
@@ -27,25 +40,25 @@ class stage_control(App):
         threading.Thread(target=target, args=args, daemon=True).start()
 
     def construct_ui(self):
-        stage_control_container = StyledContainer(container=None, variable_name="stage_control_container",
-                                                  left=0, top=0, height=350, width=650)
-
-        xyz_container = StyledContainer(container=stage_control_container, variable_name="xyz_container",
-                                        left=0, top=20, height=300, width=410)
-
+        self.memory = Memory()
+        self.configure = StageConfiguration()
+        self.stage_manager = StageManager(self.configure, create_shm=True)
+        asyncio.run(self.stage_manager.initialize([AxisType.X, AxisType.Y, AxisType.Z, AxisType.ROTATION_CHIP, AxisType.ROTATION_FIBER]))
+        stage_control_container = StyledContainer(container=None, variable_name="stage_control_container", left=0, top=0, height=350, width=650)
+        xyz_container = StyledContainer(container=stage_control_container, variable_name="xyz_container", left=0, top=20, height=300, width=410)
         self.stop_btn = StyledButton(container=xyz_container, text="Stop", variable_name="stop_button", font_size=100,
-                     left=125, top=10, width=90, height=30, normal_color="#dc3545", press_color="#c82333")
-        self.lock_box = StyledCheckBox(container=xyz_container, variable_name="lock_box", left=225, top=10,
-                       width=10, height=10, position="absolute")
-        StyledLabel(container=xyz_container, text="Lock", variable_name="lock_label", left=255, top=17,
-                    width=80, height=50, font_size=100, color="#222")
+                        left=125, top=10, width=90, height=30, normal_color="#dc3545", press_color="#c82333")
+        self.lock_box = StyledCheckBox(container=xyz_container, variable_name="lock_box", left=225, top=10, width=10, height=10, position="absolute")
+        StyledLabel(container=xyz_container, text="Lock", variable_name="lock_label", left=255, top=17, width=80, height=50, font_size=100, color="#222")
 
         labels = ["X", "Y", "Z", "Chip", "Fiber"]
         top_positions = [70, 110, 150, 190, 230]
         left_arrows = ["⮜", "⮟", "Down", "⭮", "⭮"]
         right_arrows = ["⮞", "⮝", "Up", "⭯", "⭯"]
         var_prefixes = ["x", "y", "z", "chip", "fiber"]
-        position_texts = [f"{210.4} um", f"{211.4} um", f"{212.4} um", f"{0.1} deg", f"{0.1} deg"]
+        position_texts = [f"{0}", f"{0}", f"{0}", f"{0}", f"{0}"]
+        position_unit = ["um", "um", "um", "deg", "deg"]
+        init_value = ["10", "10", "10", "0.1", "0.1"]
 
         for i in range(5):
             prefix = var_prefixes[i]
@@ -59,53 +72,60 @@ class stage_control(App):
                                  font_size=100, left=65, top=top, width=50, height=30,
                                  normal_color="#007BFF", press_color="#0056B3"))
             setattr(self, f"{prefix}_input",
-                    StyledSpinBox(container=xyz_container, variable_name=f"{prefix}_step", min_value=0, max_value=1000,
-                                    step=0.1, left=125, top=top, width=73, height=30, position="absolute"))
+                    StyledSpinBox(container=xyz_container,
+                                  variable_name=f"{prefix}_step", min_value=0, max_value=1000, value=init_value[i],
+                                  step=0.1, left=125, top=top, width=73, height=30, position="absolute"))
             setattr(self, f"{prefix}_right_btn",
                     StyledButton(container=xyz_container, text=right_arrows[i],
                                  variable_name=f"{prefix}_right_button",
                                  font_size=100, left=225, top=top, width=50, height=30,
                                  normal_color="#007BFF", press_color="#0056B3"))
-            StyledLabel(container=xyz_container, text=position_texts[i], variable_name=f"{prefix}_position_label",
-                        left=280, top=top, width=100, height=30, font_size=100, color="#222",
-                        flex=True, bold=True, justify_content="right")
+            setattr(self, f"{prefix}_position_lb",
+                    StyledLabel(container=xyz_container, text=position_texts[i],
+                                variable_name=f"{prefix}_position_lb", left=280, top=top, width=70, height=30,
+                                font_size=100, color="#222", flex=True, bold=True, justify_content="right"))
+            setattr(self, f"{prefix}_position_unit",
+                    StyledLabel(container=xyz_container, text=position_unit[i],
+                                variable_name=f"{prefix}_position_unit", left=355, top=top, width=40, height=30,
+                                font_size=100, color="#222", flex=True, bold=True, justify_content="left"))
 
         self.zero_btn = StyledButton(container=xyz_container, text="Zero", variable_name="zero_button", font_size=100,
-                     left=310, top=10, width=90, height=30, normal_color="#007BFF", press_color="#0056B3")
+                                     left=310, top=10, width=90, height=30, normal_color="#007BFF", press_color="#0056B3")
 
         limits_container = StyledContainer(container=stage_control_container, variable_name="limits_container",
                                            left=430, top=20, height=90, width=90, border=True)
         StyledLabel(container=limits_container, text="Limits", variable_name="limits_label",
                     left=22.5, top=-12, width=40, height=20, font_size=100, color="#444", position="absolute",
                     flex=True, on_line=True, justify_content="center")
-        self.limit_setting_btn = StyledButton(container=limits_container, text="Setting", variable_name="limit_setting_btn",
-                                          font_size=100, left=5, top=10, width=80, height=30,
-                                          normal_color="#007BFF", press_color="#0056B3")
+        self.limit_setting_btn = StyledButton(container=limits_container, text="Setting",
+                                              variable_name="limit_setting_btn", font_size=100, left=5, top=10,
+                                              width=80, height=30, normal_color="#007BFF", press_color="#0056B3")
         StyledButton(container=limits_container, text="Clear", variable_name="clear_button",
                      font_size=100, left=5, top=50, width=80, height=30,
                      normal_color="#007BFF", press_color="#0056B3")
-
         fine_align_container = StyledContainer(container=stage_control_container, variable_name="fine_align_container",
                                                left=540, top=20, height=90, width=90, border=True)
         StyledLabel(container=fine_align_container, text="Fine Align",
                     variable_name="fine_align_label", left=12.5, top=-12, width=65, height=20,
                     font_size=100, color="#444", position="absolute", flex=True, on_line=True, justify_content="center")
-        StyledButton(container=fine_align_container, text="Setting", variable_name="fine_align_setting_btn",
-                     font_size=100, left=5, top=10, width=80, height=30,
-                     normal_color="#007BFF", press_color="#0056B3")
+        self.fine_align_setting_btn = StyledButton(container=fine_align_container, text="Setting",
+                                                   variable_name="fine_align_setting_btn",
+                                                   font_size=100, left=5, top=10, width=80, height=30,
+                                                   normal_color="#007BFF", press_color="#0056B3")
         StyledButton(container=fine_align_container, text="Start", variable_name="start_button",
                      font_size=100, left=5, top=50, width=80, height=30,
                      normal_color="#007BFF", press_color="#0056B3")
 
-        raster_container = StyledContainer(container=stage_control_container, variable_name="raster_container",
+        area_scan_container = StyledContainer(container=stage_control_container, variable_name="area_scan_container",
                                            left=430, top=130, height=90, width=90, border=True)
-        StyledLabel(container=raster_container, text="Raster", variable_name="raster_label",
-                    left=25, top=-12, width=40, height=20, font_size=100, color="#444", position="absolute",
+        StyledLabel(container=area_scan_container, text="Area Scan", variable_name="area_scan_label",
+                    left=13, top=-12, width=65, height=20, font_size=100, color="#444", position="absolute",
                     flex=True, on_line=True, justify_content="center")
-        StyledButton(container=raster_container, text="Setting", variable_name="raster_setting_btn",
-                     font_size=100, left=5, top=10, width=80, height=30,
-                     normal_color="#007BFF", press_color="#0056B3")
-        StyledButton(container=raster_container, text="Scan", variable_name="scan_button",
+        self.scan_setting_btn = StyledButton(container=area_scan_container, text="Setting",
+                                             variable_name="area_scan_setting_btn",
+                                             font_size=100, left=5, top=10, width=80, height=30,
+                                             normal_color="#007BFF", press_color="#0056B3")
+        StyledButton(container=area_scan_container, text="Scan", variable_name="scan_button",
                      font_size=100, left=5, top=50, width=80, height=30,
                      normal_color="#007BFF", press_color="#0056B3")
 
@@ -142,6 +162,8 @@ class stage_control(App):
         self.load_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_load_btn))
         self.move_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_move_btn))
         self.limit_setting_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_limit_setting_btn))
+        self.fine_align_setting_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_fine_align_setting_btn))
+        self.scan_setting_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_scan_setting_btn))
         self.lock_box.onchange.do(lambda emitter, value: self.run_in_thread(self.onchange_lock_box, emitter, value))
         self.move_dd.onchange.do(lambda emitter, value: self.run_in_thread(self.onchange_move_dd, emitter, value))
 
@@ -155,44 +177,54 @@ class stage_control(App):
         print("Zero")
 
     def onclick_x_left(self):
-        value = self.x_input.get_value()
+        value = float(self.x_input.get_value())
         print(f"X Left {value} um")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.X, value, True))
 
     def onclick_x_right(self):
-        value = self.x_input.get_value()
+        value = float(self.x_input.get_value())
         print(f"X Right {value} um")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.X, -value, True))
 
     def onclick_y_left(self):
-        value = self.y_input.get_value()
+        value = float(self.y_input.get_value())
         print(f"Y Left {value} um")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.Y, value, True))
 
     def onclick_y_right(self):
-        value = self.y_input.get_value()
+        value = float(self.y_input.get_value())
         print(f"Y Right {value} um")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.Y, -value, True))
 
     def onclick_z_left(self):
-        value = self.z_input.get_value()
+        value = float(self.z_input.get_value())
         print(f"Z Down {value} um")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.Z, value, True))
 
     def onclick_z_right(self):
-        value = self.z_input.get_value()
+        value = float(self.z_input.get_value())
         print(f"Z Up {value} um")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.Z, -value, True))
 
     def onclick_chip_left(self):
-        value = self.chip_input.get_value()
+        value = float(self.chip_input.get_value())
         print(f"Chip Turn CW {value} deg")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.ROTATION_CHIP, value, True))
 
     def onclick_chip_right(self):
-        value = self.chip_input.get_value()
+        value = float(self.chip_input.get_value())
         print(f"Chip Turn CCW {value} deg")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.ROTATION_CHIP, -value, True))
 
     def onclick_fiber_left(self):
-        value = self.fiber_input.get_value()
+        value = float(self.fiber_input.get_value())
         print(f"Fiber Turn CW {value} deg")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.ROTATION_FIBER, value, True))
 
     def onclick_fiber_right(self):
-        value = self.fiber_input.get_value()
+        value = float(self.fiber_input.get_value())
         print(f"Fiber Turn CCW {value} deg")
+        asyncio.run(self.stage_manager.move_single_axis(AxisType.ROTATION_FIBER, -value, True))
 
     def onclick_load_btn(self):
         self.gds = lab_coordinates.coordinates(("./res/" + filename), read_file=False,
@@ -228,6 +260,9 @@ class stage_control(App):
 
         print("Unlocked" if enabled else "Locked")
 
+    def onchange_move_dd(self, emitter, value):
+        self.move_dd.attributes["title"] = value
+
     def onclick_limit_setting_btn(self):
         local_ip = get_local_ip()
         webview.create_window(
@@ -239,8 +274,26 @@ class stage_control(App):
             on_top=True,
         )
 
-    def onchange_move_dd(self, emitter, value):
-        self.move_dd.attributes["title"] = value
+    def onclick_fine_align_setting_btn(self):
+        local_ip = get_local_ip()
+        webview.create_window(
+            "Setting",
+            f"http://{local_ip}:7003",
+            width=222,
+            height=236,
+            resizable=True,
+            on_top=True,
+        )
+    def onclick_scan_setting_btn(self):
+        local_ip = get_local_ip()
+        webview.create_window(
+            "Setting",
+            f"http://{local_ip}:7004",
+            width=222,
+            height=236,
+            resizable=True,
+            on_top=True,
+        )
 
 
 def get_local_ip():
@@ -274,9 +327,12 @@ def disable_scroll():
 
 
 if __name__ == '__main__':
+
+
     threading.Thread(target=run_remi, daemon=True).start()
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     local_ip = get_local_ip()
+
     webview.create_window(
         'Stage Control',
         f'http://{local_ip}:8000',
