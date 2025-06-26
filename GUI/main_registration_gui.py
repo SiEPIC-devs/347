@@ -1,8 +1,8 @@
 from remi.gui import *
 from remi import start, App
 import os
-from myguilab import *
-import coordinates
+from lab_gui import *
+import lab_coordinates
 import glob
 import threading
 
@@ -26,7 +26,7 @@ class registration(App):
         self.terminal.terminal_refresh()
 
     def main(self):
-        return registration.construct_ui(self)
+        return self.construct_ui()
 
     # Utility method to run any target in a background thread
     def run_in_thread(self, target, *args):
@@ -141,7 +141,7 @@ class registration(App):
         except:
             pass
 
-        self.gds = coordinates.coordinates(("./res/" + filename), read_file=True,
+        self.gds = lab_coordinates.coordinates(("./res/" + filename), read_file=True,
                                            name="./database/coordinates.json")
         self.number = self.gds.listdeviceparam("number")
         self.coordinate = self.gds.listdeviceparam("coordinate")
@@ -156,6 +156,9 @@ class registration(App):
         self.device_id_1.append(self.devices)
         self.device_id_2.append(self.devices)
         self.device_id_3.append(self.devices)
+        self.device_id_1.attributes["title"] = self.devices[0]
+        self.device_id_2.attributes["title"] = self.devices[0]
+        self.device_id_3.attributes["title"] = self.devices[0]
         self.gds_x_1.set_text(str(self.coordinate[0][0]))
         self.gds_y_1.set_text(str(self.coordinate[0][1]))
         self.gds_x_2.set_text(str(self.coordinate[0][0]))
@@ -170,6 +173,7 @@ class registration(App):
         y = self.coordinate[self.number_1-1][1]
         self.gds_x_1.set_text(str(x))
         self.gds_y_1.set_text(str(y))
+        self.device_id_1.attributes["title"] = new_value
 
     def onchange_device_2(self, emitter, new_value):
         number_str = new_value.split("(")[-1].split(")")[0]
@@ -178,6 +182,7 @@ class registration(App):
         y = self.coordinate[self.number_2-1][1]
         self.gds_x_2.set_text(str(x))
         self.gds_y_2.set_text(str(y))
+        self.device_id_2.attributes["title"] = new_value
 
     def onchange_device_3(self, emitter, new_value):
         number_str = new_value.split("(")[-1].split(")")[0]
@@ -186,6 +191,7 @@ class registration(App):
         y = self.coordinate[self.number_3-1][1]
         self.gds_x_3.set_text(str(x))
         self.gds_y_3.set_text(str(y))
+        self.device_id_3.attributes["title"] = new_value
 
     def onchange_checkbox_1(self, emitter, value):
         if int(value) == 1:

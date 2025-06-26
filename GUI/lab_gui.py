@@ -1,6 +1,13 @@
 from remi.gui import *
 import os
 import time
+from multiprocessing import Process
+from time import sleep, monotonic
+from modern.config.stage_position import *
+from modern.config.stage_config import *
+from modern.utils.shared_memory import *
+from modern.hal.motors_hal import AxisType
+import gc
 
 def apply_common_style(widget, left, top, width, height, position="absolute", percent=False):
     widget.css_position = position
@@ -265,3 +272,84 @@ class StyledImageBox(Image):
         self.variable_name = variable_name
         if container:
             container.append(self, self.variable_name)
+
+class StyledSpinBox(SpinBox):
+    def __init__(self, variable_name, left, top,
+                 width=150, height=30, value=0,
+                 step=1, min_value=None, max_value=None,
+                 position="absolute", percent=False,
+                 container=None):
+        super().__init__()
+
+        apply_common_style(self, left, top, width, height, position, percent)
+
+        self.set_value(str(value))
+        self.attr_step = str(step)
+        if min_value is not None:
+            self.attr_min = str(min_value)
+        if max_value is not None:
+            self.attr_max = str(max_value)
+
+        self.variable_name = variable_name
+
+        self.style.update({
+            "padding-top": "0px",
+            "padding-right": "0px",
+            "padding-bottom": "0px",
+            "padding-left": "15px",
+            "border": "1px solid #aaa",
+            "border-radius": "4px",
+            "box-shadow": "inset 0 1px 3px rgba(0,0,0,0.1)",
+            "background-color": "#fafafa",
+            "font-size": "15px",
+            "color": "#333",
+            "line-height": f"{height}px",
+            "text-align": "center",
+            "display": "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "white-space": "nowrap",
+            "overflow": "hidden",
+            "overflow-x": "hidden",
+            "overflow-y": "hidden",
+            "resize": "none"
+        })
+
+        if container:
+            container.append(self, self.variable_name)
+
+class Memory():
+    def __init__(self):
+        self.x_pos = 0
+        self.y_pos = 0
+        self.z_pos = 0
+        self.fr_pos = 0
+        self.cp_pos = 0
+
+    def writer_pos(self):
+        shm, raw = open_shared_stage_position()
+        sp = StagePosition(shared_struct=raw)
+        # write into shared memory
+        sp.set_positions(AxisType.X, 123.456)
+        sp.set_homed(AxisType.X)
+
+        # Clean - explicitly delete the object first
+        del sp
+        del raw
+        shm.close()
+
+    def reader_pos(self):
+        # give writer a moment
+        sleep(0.1)
+        shm, raw = open_shared_stage_position("stage_position")
+        sp = StagePosition(shared_struct=raw)
+        self.x_pos = sp.x.position
+        self.y_pos = sp.y.position
+        self.z_pos = sp.z.position
+        self.fr_pos = sp.fr.position
+        self.cp_pos = sp.cp.position
+
+        # Clean - explicitly delete the object first
+        del sp
+        del raw
+        shm.close()
