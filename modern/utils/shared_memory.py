@@ -22,7 +22,6 @@ def create_shared_stage_position() ->  tuple[shared_memory.SharedMemory, StagePo
     # Create shared mem
     size = ctypes.sizeof(StagePositionStruct)
     shm = shared_memory.SharedMemory(name="stage_position",create=True,size=size)
-
     # Map shm to struct instance
     view = StagePositionStruct.from_buffer(shm.buf)
     view.__init__()

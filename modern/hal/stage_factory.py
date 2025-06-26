@@ -1,5 +1,5 @@
 from typing import Type, Dict
-from motors_hal import MotorHAL # import hardware abstraction  
+from modern.hal.motors_hal import MotorHAL # import hardware abstraction  
 
 """
 Made by: Cameron Basara, 6/10/2025

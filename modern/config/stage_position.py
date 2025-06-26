@@ -177,9 +177,9 @@ class StagePosition:
     def cp(self) -> AxisPosition:
         return self.get(AxisType.ROTATION_CHIP)
 
-sp = StagePosition()
-# print(sp.get_struct())
-print(sp.x)
-setattr(sp, "x", 11.1)
-sp.set_homed(AxisType.X)
-print(sp.x)
+# sp = StagePosition()
+# # print(sp.get_struct())
+# print(sp.x)
+# setattr(sp, "x", 11.1)
+# sp.set_homed(AxisType.X)
+# print(sp.x)

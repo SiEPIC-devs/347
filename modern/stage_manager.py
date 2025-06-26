@@ -8,8 +8,8 @@ from time import monotonic
 
 # local API calls
 from modern.hal.motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
-# from modern.stage_controller import StageControl
-from modern.modern_stage import StageControl
+from modern.stage_controller import StageControl
+# from modern.modern_stage import StageControl 
 from modern.hal.stage_factory import create_driver
 from modern.config.stage_position import *
 from modern.config.stage_config import *
@@ -33,7 +33,7 @@ TODO:
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - \n %(message)s'
 )
 
 logger = logging.getLogger(__name__)
@@ -72,13 +72,12 @@ class StageManager:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Proper async cleanup"""
+        """Proper async cleanup with context manager exit"""
         await self.cleanup()
 
     # Helper decorator to ensure SHM is properly cleaned
     async def cleanup(self):
         """Cleanup method for tasks and shm"""
-        logger.info("Starting Manager cleanup")
 
         # Cancel Background tasks first
         cleanup_tasks = []
@@ -110,14 +109,15 @@ class StageManager:
             # Close shm
             if hasattr(self, 'shm_position'):
                 self.shm_position.close()
+                self.shm_position.unlink()
             if hasattr(self, 'shm_config'):
                 self.shm_config.close()
-        
+                self.shm_config.unlink()    
+        except (FileNotFoundError, AttributeError):
+            pass # Cleared mem or never existed
         except Exception as e:
             logger.error(f"Shared memory cleanup error: {e}")
         
-        logger.info("Manager cleanup complete")
-
     # Position poll loop
     async def _position_poll_loop(self):
         """Background loop to poll motor positions and update shared memory"""
@@ -129,12 +129,16 @@ class StageManager:
                 if not self.motors:
                     await asyncio.sleep(1.0)
                     continue
-
+                
+                # Take a snapshot of to ensure it isn't changed in concurrent coroutines
+                motors_snapshot = dict(self.motors)
+                
                 # Poll each motor position
-                for axis, motor in self.motors.items():
+                for axis, motor in motors_snapshot.items():
                     try:
                         position = await motor.get_position()
                         if position is not None:
+                            logger.info(f"Testing position: {position.actual:.3f}")
                             # Update local cache
                             self._last_positions[axis] = position.actual
 
@@ -144,6 +148,7 @@ class StageManager:
                             # Check for positional drift
                             exp = self._last_positions.get(axis, 0.0)
                             if abs(position.actual - exp) > self.config.position_tolerance:
+                                # OFC this does not work right now since they will be identical at each call
                                 logger.warning(f"Positional drift on {axis.name}: expected: {exp:.3f} actual: {position.actual:.3f}")
                     
                     except Exception as e:
@@ -159,7 +164,7 @@ class StageManager:
                 logger.error(f"Unexpected error in position poll loop: {e}")
                 await asyncio.sleep(1.0)  # Prevent tight error loop
     
-    async def start_brackground_tasks(self):
+    async def start_background_tasks(self):
         """Start all background tasks call after initialization"""
         if self._tasks:
             logger.warning("Background tasks already running")
@@ -266,7 +271,7 @@ class StageManager:
                 if full:
                     # If a static param changes, reinitialize stage
                     self.config = cfg
-                    ok = await self.initialize()
+                    ok = await self.initialize([axis for axis in AxisType if axis != AxisType.ALL])
                     return ok
                 
                 self.config = cfg
@@ -287,7 +292,7 @@ class StageManager:
                 if full:
                     # If a static param changes, reinitialize stage
                     self.config = new_config
-                    await self.initialize()
+                    await self.initialize([axis for axis in AxisType if axis != AxisType.ALL])
 
                 self.config = new_config
                 await self._apply_config_changes()
@@ -426,7 +431,7 @@ class StageManager:
         self._homed_axes[axis] = is_homed
 
         # Update shared memory
-        self.set_homed(axis)
+        self.shared_stage_position.set_homed(axis)
 
         # Emit homing event
         event = MotorEvent(

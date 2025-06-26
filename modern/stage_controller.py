@@ -4,7 +4,7 @@ import logging
 from typing import Optional, Dict, Any, Tuple, Callable
 from time import monotonic
 
-from motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
+from modern.hal.motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
 
 """
 Made by: Cameron Basara, 6/16/2025
@@ -693,7 +693,7 @@ class StageControl(MotorHAL):
             'position_tolerance': self._position_tolerance
         }
 
-from motor_factory import register_driver
+from modern.hal.stage_factory import register_driver
 
 # Register 347 motor stage
 register_driver("stage_control", StageControl)

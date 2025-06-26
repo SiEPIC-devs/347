@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 # import numpy as np
 
-from motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
+from modern.hal.motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
 import serial
 
 
@@ -147,7 +147,7 @@ class StageControl(MotorHAL):
             if not self._serial_port or not self._serial_port.is_open:
                 raise ConnectionError("Serial port not connected")
 
-            print(f"cmd: {cmd}")
+            # print(f"cmd: {cmd}")
             self._serial_port.write((cmd + "\r").encode('ascii')) # maybe
             time.sleep(0.05)  # Small delay for command processing
             
@@ -363,7 +363,6 @@ class StageControl(MotorHAL):
             try:
                 response = self._query_command(f"{self.AXIS_MAP[self.axis]}POS?")
 
-                print(f"RESP: {response}\n") # Debug
                 
                 # Parse response: "position,encoder_position"
                 # parts = response.split(',')
@@ -674,7 +673,7 @@ class StageControl(MotorHAL):
             'position_tolerance': self._position_tolerance
         }
 
-from motor_factory import register_driver
+from modern.hal.stage_factory import register_driver
 
 # Register 347 motor stage
 register_driver("stage_control", StageControl)

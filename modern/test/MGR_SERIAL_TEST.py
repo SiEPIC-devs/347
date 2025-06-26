@@ -19,40 +19,33 @@ def print_event(event: MotorEvent):
 
 async def demo():
     cfg = StageConfiguration()
-    async with StageManager(profile_config=cfg) as mgr:
+    mgr = StageManager(cfg)
+    # Add event handler
+    mgr.add_event_callback(print_event)
 
-        # Add event handler
-        mgr.add_event_callback(print_event)
+    # Initialize just the X axis
+    x = AxisType.X
+    y = AxisType.Y
+    z = AxisType.Z
+    fr = AxisType.ROTATION_FIBER
+    cp = AxisType.ROTATION_CHIP
 
-        # Initialize just the X axis
-        x = AxisType.X
-        y = AxisType.Y
-        z = AxisType.Z
-        fr = AxisType.ROTATION_FIBER
-        cp = AxisType.ROTATION_CHIP
-
-        all = [x,y,z,fr,cp] # all
+    all = [x,y,z,fr,cp] # all
+    try:
+        # Initially no tasks
+        assert len(mgr._tasks) == 0
         
-        # Verify initialization
-        assert mgr._tasks == []
-        assert mgr.motors == {}
+        # Can't start tasks without motors
+        await mgr.start_background_tasks()
+        assert len(mgr._tasks) > 0  # Should still be 0
         
-        # Initialize some axes (this will depend on your hardware/mocks)
-        success = await mgr.initialize([x, y])
-        if success:  
-            await mgr.start_background_tasks()
-            assert len(mgr._tasks) > 0
-            
-            # Verify tasks are running
+        # Initialize motors first
+        success = await mgr.initialize(all)
+        if success:
+            # Tasks should be running
             for task in mgr._tasks:
+                assert not task.cancelled()
                 assert not task.done()
-
-        # print(">>> Initializing axis …")
-        # ok = await mgr.initialize(axes=all)
-        # if not ok:
-        #     print(f"init failed")
-        #     await mgr.disconnect_all()
-        # print(f"Initialized X: {ok}")
 
         async def home_all():
             home_x = await mgr.home_limits(x)
@@ -87,11 +80,12 @@ async def demo():
                 print("fr failed to home")
 
         # await home_all()
+        await mgr.home_limits(x)
+        # await mgr.home_limits()
 
-        # disc all
-        print("\n>>> Cleanup …")
+        
+    finally:
         await mgr.cleanup()
-        print("Done.")
 
 if __name__ == "__main__":
     asyncio.run(demo())
