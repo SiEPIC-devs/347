@@ -5,6 +5,8 @@ from modern.stage_manager import StageManager
 from modern.config.stage_config import StageConfiguration
 from modern.config.pstage_configuration import StageConfiguration as SGE
 from modern.hal.motors_hal import AxisType, MotorEvent, MotorEventType
+from modern.stage_controller import StageControl
+
 
 # Define a simple event callback that just prints everything it sees
 def print_event(event: MotorEvent):
@@ -41,11 +43,16 @@ async def demo():
         
         # Initialize motors first
         success = await mgr.initialize(all)
+        print(f"Total connections: {StageControl.get_connection_count()}")
+
         if success:
             # Tasks should be running
             for task in mgr._tasks:
                 assert not task.cancelled()
                 assert not task.done()
+            
+            print(f"RAWR Total connections: {StageControl.get_connection_count()}")
+
 
         async def home_all():
             home_x = await mgr.home_limits(x)
@@ -79,8 +86,8 @@ async def demo():
             else:
                 print("fr failed to home")
 
-        # await home_all()
-        await mgr.home_limits(x)
+        await home_all()
+        # await mgr.home_limits(x)
         # await mgr.home_limits()
 
         

@@ -327,7 +327,7 @@ class StageManager:
             motor = create_driver(driver_key, **params)
 
             # Catch exceptions
-            ok = await self._safe_execute(f"connect {axis.name}", motor.connect()) # motor connects from abstracted stage driver
+            ok  = await self._safe_execute(f"connect {axis.name}", motor.connect()) # motor connects from abstracted stage driver
             if ok:
                 self.motors[axis] = motor
                 self._last_positions[axis] = 0.0
@@ -462,7 +462,7 @@ class StageManager:
     
     @update_stage_position
     @requires_motor
-    async def git(self, axis: AxisType) -> bool:
+    async def home_limits(self, axis: AxisType) -> bool:
         if (axis == AxisType.Z):
             # Ensure safe homing of Z axis
             aok = await self._safe_execute(f"", self.motors[AxisType.Y].move_absolute(
