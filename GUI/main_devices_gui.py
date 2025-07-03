@@ -18,23 +18,7 @@ def fmt(val):
 
 class devices(App):
     def __init__(self, *args, **kwargs):
-        self.timestamp = -1
-
-        self.gds = lab_coordinates.coordinates(read_file=False, name="./database/coordinates.json")
-        self.number = self.gds.listdeviceparam("number")
-        self.coordinate = self.gds.listdeviceparam("coordinate")
-        self.polarization = self.gds.listdeviceparam("polarization")
-        self.wavelength = self.gds.listdeviceparam("wavelength")
-        self.type = self.gds.listdeviceparam("type")
-        self.devicename = [f"{name} ({num})" for name, num in zip(
-            self.gds.listdeviceparam("devicename"), self.number)]
-
-        self.length = len(self.number)
-        self.checkbox_state = [False] * self.length
-        self.filtered_idx = list(range(self.length))
-        self.page_size = 50
-        self.page_index = 0
-
+        self.read_file()
         if "editing_mode" not in kwargs:
             super(devices, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
@@ -80,6 +64,7 @@ class devices(App):
                     c.style.update({"display": "table-cell", "background-color": bg})
 
                 cells[0].set_text(self.devicename[global_idx])
+                cells[0].attributes["title"] = self.devicename[global_idx]
                 cb_name = f"test_{global_idx}"
 
                 if not hasattr(self, cb_name):
@@ -94,11 +79,15 @@ class devices(App):
                 cells[1].empty()
                 cells[1].append(cb)
                 cells[2].set_text(self.polarization[global_idx])
+                cells[2].attributes["title"] = self.polarization[global_idx]
                 cells[3].set_text(fmt(self.wavelength[global_idx]))
+                cells[3].attributes["title"] = self.wavelength[global_idx]
                 cells[4].set_text(self.type[global_idx])
+                cells[4].attributes["title"] = self.type[global_idx]
                 cells[5].set_text(fmt(self.coordinate[global_idx][0]))
+                cells[5].attributes["title"] = fmt(self.coordinate[global_idx][0])
                 cells[6].set_text(fmt(self.coordinate[global_idx][1]))
-
+                cells[6].attributes["title"] = fmt(self.coordinate[global_idx][1])
             else:
                 for c in row.children.values():
                     c.style["display"] = "none"
@@ -184,6 +173,8 @@ class devices(App):
                                      left=180, top=5, width=40, height=25)
         self.next_btn = StyledButton(container=pg, text="Next ▶", variable_name="next_page",
                                      left=235, top=5, width=80, height=25)
+        self.load_btn = StyledButton(container=pg, text="Load", variable_name="load_page",
+                                     left=330, top=5, width=60, height=25)
         terminal_container = StyledContainer(container=devices_container, variable_name="terminal_container",
                                              left=0, top=500, height=150, width=650, bg_color=True)
         self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
@@ -196,6 +187,7 @@ class devices(App):
         self.clear_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_clear))
         self.all_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_all))
         self.confirm_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_confirm))
+        self.load_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_load))
 
         self.devices_container = devices_container
         self.build_table_rows()
@@ -268,6 +260,27 @@ class devices(App):
             json.dump(selected_idx, f, indent=2)
 
         print(f"Serial saved to {path}")
+
+    def onclick_load(self):
+        self.read_file()
+        self.build_table_rows()
+
+    def read_file(self):
+        self.gds = lab_coordinates.coordinates(read_file=False, name="./database/coordinates.json")
+        self.number = self.gds.listdeviceparam("number")
+        self.coordinate = self.gds.listdeviceparam("coordinate")
+        self.polarization = self.gds.listdeviceparam("polarization")
+        self.wavelength = self.gds.listdeviceparam("wavelength")
+        self.type = self.gds.listdeviceparam("type")
+        self.devicename = [f"{name} ({num})" for name, num in zip(
+            self.gds.listdeviceparam("devicename"), self.number)]
+
+        self.length = len(self.number)
+        self.checkbox_state = [False] * self.length
+        self.filtered_idx = list(range(self.length))
+        self.page_size = 50
+        self.page_index = 0
+
 
 
 if __name__ == "__main__":

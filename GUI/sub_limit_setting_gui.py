@@ -1,10 +1,10 @@
 from lab_gui import *
 from remi import start, App
 
-class add_btn(App):
+class limit(App):
     def __init__(self, *args, **kwargs):
         if "editing_mode" not in kwargs:
-            super(add_btn, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
+            super(limit, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
     def idle(self):
         pass
@@ -51,10 +51,8 @@ class add_btn(App):
         StyledLabel(container=limit_setting_container, text="um", variable_name="z_um", left=255, top=74,
                     width=20, height=25, font_size=100, flex=True, justify_content="left", color="#222")
 
-        self.cancel_btn = StyledButton(container=limit_setting_container, text="Cancel", variable_name="cancel_btn",
-                                       left=75, top=110, height=25, width=70, font_size=90)
         self.confirm_btn = StyledButton(container=limit_setting_container, text="Confirm", variable_name="confirm_btn",
-                                        left=155, top=110, height=25, width=70, font_size=90)
+                                        left=115, top=110, height=25, width=70, font_size=90)
 
         self.limit_setting_container = limit_setting_container
         return limit_setting_container
@@ -64,7 +62,7 @@ class add_btn(App):
 
 if __name__ == "__main__":
     configuration = {
-        "config_project_name": "add_btn",
+        "config_project_name": "limit",
         "config_address": "0.0.0.0",
         "config_port": 7002,
         "config_multiple_instance": False,
@@ -72,7 +70,7 @@ if __name__ == "__main__":
         "config_start_browser": False,
         "config_resourcepath": "./res/"
     }
-    start(add_btn,
+    start(limit,
           address=configuration["config_address"],
           port=configuration["config_port"],
           multiple_instance=configuration["config_multiple_instance"],
