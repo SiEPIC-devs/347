@@ -6,14 +6,14 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 # import numpy as np
 
-from modern.hal.motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
+from motors.hal.motors_hal import MotorHAL, AxisType, MotorState, Position, MotorConfig, MotorEventType, MotorEvent
 import serial
 
 
 """
 Made by: Cameron Basara, 5/30/2025
 
-Prototype implementation of Stage control at 347 using more modern Python features and the motor hardward abstraction layer
+Prototype implementation of Stage control at 347 using more motors Python features and the motor hardward abstraction layer
 """
 
 # CONSTANTS
@@ -673,7 +673,7 @@ class StageControl(MotorHAL):
             'position_tolerance': self._position_tolerance
         }
 
-from modern.hal.stage_factory import register_driver
+from motors.hal.stage_factory import register_driver
 
 # Register 347 motor stage
 register_driver("stage_control", StageControl)

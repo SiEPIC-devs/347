@@ -1,9 +1,9 @@
 from multiprocessing import Process
 from time import sleep, monotonic
-from modern.config.stage_position import *
-from modern.config.stage_config import *
-from modern.utils.shared_memory import *
-from modern.hal.motors_hal import AxisType
+from motors.config.stage_position import *
+from motors.config.stage_config import *
+from motors.utils.shared_memory import *
+from motors.hal.motors_hal import AxisType
 import traceback
 
 def writer_pos():

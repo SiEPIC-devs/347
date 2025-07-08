@@ -1,5 +1,5 @@
 from typing import Type, Dict
-from modern.hal.motors_hal import MotorHAL # import hardware abstraction  
+from motors.hal.motors_hal import MotorHAL # import hardware abstraction  
 
 # Try
 import inspect

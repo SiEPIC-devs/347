@@ -1,6 +1,6 @@
 # reader.py
-from modern.utils.shared_memory import open_shared_stage_position
-from modern.config.stage_position   import StagePosition
+from motors.utils.shared_memory import open_shared_stage_position
+from motors.config.stage_position   import StagePosition
 
 if __name__ == "__main__":
     # Give writer time to create & populate the block

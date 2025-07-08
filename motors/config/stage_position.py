@@ -4,7 +4,7 @@ from time import monotonic
 from dataclasses import dataclass, fields
 import ctypes
 
-from modern.hal.motors_hal import AxisType
+from motors.hal.motors_hal import AxisType
 
 """
 Stage position memory

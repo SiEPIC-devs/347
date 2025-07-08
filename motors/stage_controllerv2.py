@@ -4,7 +4,7 @@ import logging
 from typing import Optional, Dict, Any, Tuple, ClassVar, Callable, List
 from time import monotonic
 
-from modern.hal.motors_hal import (
+from motors.hal.motors_hal import (
     MotorHAL,
     AxisType,
     MotorState,
@@ -13,15 +13,7 @@ from modern.hal.motors_hal import (
     MotorEventType,
     MotorEvent
 )
-from modern.hal.stage_factory import register_driver
-
-"""
-Made by: Cameron Basara, 6/16/2025
-
-Implementation of stage controller at 347 using asyncio for concurrent programming.
-
-Inherits from the motor hardware abstraction layer.
-"""
+from motors.hal.stage_factory import register_driver
 
 # CONSTANTS
 GLOBAL_COM_PORT = "/dev/ttyUSB0"

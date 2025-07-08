@@ -1,11 +1,11 @@
 import asyncio
 import time
 
-from modern.stage_manager import StageManager
-from modern.config.stage_config import StageConfiguration
-from modern.config.pstage_configuration import StageConfiguration as SGE
-from modern.hal.motors_hal import AxisType, MotorEvent, MotorEventType
-from modern.stage_controller import StageControl
+from motors.stage_manager import StageManager
+from motors.config.stage_config import StageConfiguration
+from motors.config.pstage_configuration import StageConfiguration as SGE
+from motors.hal.motors_hal import AxisType, MotorEvent, MotorEventType
+from motors.stage_controller import StageControl
 
 
 # Define a simple event callback that just prints everything it sees

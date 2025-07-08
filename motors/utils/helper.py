@@ -1,7 +1,7 @@
 import functools
 import asyncio
 from typing import Callable, TypeVar, Awaitable
-from modern_stage import AxisType
+from motors_stage import AxisType
 
 F = TypeVar("F", bound=Callable[..., Awaitable])
 

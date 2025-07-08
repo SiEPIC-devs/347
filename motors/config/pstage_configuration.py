@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Tuple
-from modern.hal.motors_hal import AxisType
+from motors.hal.motors_hal import AxisType
 
 @dataclass
 class StageConfiguration():

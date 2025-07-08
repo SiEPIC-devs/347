@@ -1,8 +1,8 @@
 # writer.py
 from time import sleep
-from modern.utils.shared_memory import create_shared_stage_position
-from modern.config.stage_position import StagePosition
-from modern.hal.motors_hal import AxisType
+from motors.utils.shared_memory import create_shared_stage_position
+from motors.config.stage_position import StagePosition
+from motors.hal.motors_hal import AxisType
 
 if __name__ == "__main__":
     # 1) Create the SHM block named "stage_position" and zero it

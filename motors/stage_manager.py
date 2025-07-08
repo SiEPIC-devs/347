@@ -7,14 +7,14 @@ import time
 from time import monotonic
 
 # local API calls
-from modern.hal.motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
-from modern.stage_controller import StageControl
-# from modern.modern_stage import StageControl 
-from modern.hal.stage_factory import create_driver
-from modern.config.stage_position import *
-from modern.config.stage_config import *
-from modern.utils.update_stage import update_stage_position
-from modern.utils.shared_memory import *
+from motors.hal.motors_hal import AxisType, MotorState, Position, MotorEvent, MotorEventType
+from motors.stage_controller import StageControl
+# from motors.motors_stage import StageControl 
+from motors.hal.stage_factory import create_driver
+from motors.config.stage_position import *
+from motors.config.stage_config import *
+from motors.utils.update_stage import update_stage_position
+from motors.utils.shared_memory import *
 
 """
 Made by: Cameron Basara, 6/17/2025

@@ -5,8 +5,8 @@ from multiprocessing import shared_memory, Process
 from time import monotonic
 from typing import Optional
 
-from modern.config.stage_position import StagePosition, StagePositionStruct
-from modern.config.stage_config import StageConfiguration
+from motors.config.stage_position import StagePosition, StagePositionStruct
+from motors.config.stage_config import StageConfiguration
 
 """
 Helper functions to share stage position memory w the manager
