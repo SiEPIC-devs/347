@@ -1,9 +1,9 @@
 import pyvisa
-from LDC.hal.LDC_hal import LDCHAL
+from LDC.hal.ldc_hal import LdcHAL
 
 
-class SrsLdcHAL(LDCHAL):
-    """HAL for SRS LDC500 series using VISA (GPIB) communication."""
+class SrsLdc502(LdcHAL):
+    """Driver for SRS LDC500 series using VISA (GPIB) communication."""
 
     def __init__(
         self,
@@ -19,7 +19,7 @@ class SrsLdcHAL(LDCHAL):
         self._rm = pyvisa.ResourceManager()
         self._inst = None
 
-    def open(self) -> bool:
+    def connect(self) -> bool:
         """Open VISA session and basic instrument init."""
         try:
             self._inst = self._rm.open_resource(self._visa_addr)
@@ -30,6 +30,16 @@ class SrsLdcHAL(LDCHAL):
             return True
         except Exception:
             return False
+        
+    def disconnect(self) -> None:
+        """Disable TEC and close VISA session."""
+        if self._inst:
+            try:
+                self._inst.write("OUTP OFF")
+            except Exception:
+                pass
+            self._inst.close()
+        self._rm.close()
 
     def configure(self) -> bool:
         """Apply sensor, PID, and setpoint configurations."""
@@ -55,16 +65,7 @@ class SrsLdcHAL(LDCHAL):
         resp = self._inst.query("MEAS:TEMP?")
         return float(resp.strip())
 
-    def close(self) -> None:
-        """Disable TEC and close VISA session."""
-        if self._inst:
-            try:
-                self._inst.write("OUTP OFF")
-            except Exception:
-                pass
-            self._inst.close()
-        self._rm.close()
-
+    
     # Temperature control overrides
     def set_temperature(self, setpoint: float) -> bool:
         try:
@@ -112,3 +113,6 @@ class SrsLdcHAL(LDCHAL):
     def get_ld_on(self) -> bool:
         resp = self._inst.query("OUTP:LD?")
         return bool(int(resp.strip()))
+
+from LDC.hal.ldc_factory import register_driver
+register_driver("srs_ldc_502", SrsLdc502)

@@ -2,12 +2,17 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class LDCHAL(ABC):
+class LdcHAL(ABC):
     """Abstract base class for hardware abstraction layers of LDC devices."""
 
     @abstractmethod
-    def open(self) -> bool:
+    def connect(self) -> bool:
         """Establish connection and perform any initial handshake or setup."""
+        pass
+
+    @abstractmethod
+    def disconnect(self) -> None:
+        """Safely shut down and close the connection."""
         pass
 
     @abstractmethod
@@ -18,11 +23,6 @@ class LDCHAL(ABC):
     @abstractmethod
     def measure(self) -> Any:
         """Take a measurement or reading (e.g., temperature, signal)."""
-        pass
-
-    @abstractmethod
-    def close(self) -> None:
-        """Safely shut down and close the connection."""
         pass
 
     # Temperature control interface

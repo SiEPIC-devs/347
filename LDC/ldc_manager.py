@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict, Any
-from LDC.hal.LDC_hal import LDCHAL
-from LDC.hal.LDC_factory import create_driver
+from LDC.hal.ldc_hal import LdcHAL
+from LDC.hal.ldc_factory import create_driver
 
 
 class SRSManager:
@@ -20,7 +20,7 @@ class SRSManager:
         }
         """
         self._cfg = config.get("instruments", {})
-        self._instruments: Dict[str, LDCHAL] = {}
+        self._instruments: Dict[str, LdcHAL] = {}
 
     async def initialize_all(self) -> bool:
         """
