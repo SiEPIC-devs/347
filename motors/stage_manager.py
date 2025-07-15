@@ -25,7 +25,7 @@ TODO:
     Implement cominterface ? may not be useful
     Implement interactions with other hardware devices: lasers, detectors, TECs, Cams
     Implement interactions with gui
-    Document control flow
+    Document control flow   
 
 """
 
@@ -70,7 +70,7 @@ class StageManager:
         """Async context manager entry"""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self):
         """Proper async cleanup with context manager exit"""
         await self.cleanup()
 
