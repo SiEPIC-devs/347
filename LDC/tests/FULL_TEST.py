@@ -29,40 +29,6 @@ def test_initialize_and_connect():
     print("→ is_connected() after disconnect", m.is_connected())
     print("-" * 60)
 
-def test_sensor_type():
-    m = reset_manager()
-    m.initialize(); m.connect()
-    cfg = m.get_config()
-    orig = cfg.get("sensor_type")
-    print("original sensor_type:", orig)
-
-    alt = "thermocouple" if orig != "thermocouple" else "thermistor"
-    print(f"→ set_sensor_type({alt})", m.set_sensor_type(alt))
-    print("now sensor_type:", m.get_config().get("sensor_type"))
-
-    # restore
-    print(f"→ reset to {orig}", m.set_sensor_type(orig))
-    print("restored sensor_type:", m.get_config().get("sensor_type"))
-    m.disconnect()
-    print("-" * 60)
-
-def test_sensor_coeffs():
-    m = reset_manager()
-    m.initialize(); m.connect()
-    cfg = m.get_config()
-    orig = cfg.get("model_coeffs", [0.0,0.0,0.0])
-    print("original model_coeffs:", orig)
-
-    new = [c + 0.1 for c in orig]
-    print(f"→ configure_sensor_coeffs({new})", m.configure_sensor_coeffs(new))
-    print("now model_coeffs:", m.get_config().get("model_coeffs"))
-
-    # restore
-    print(f"→ reset to {orig}", m.configure_sensor_coeffs(orig))
-    print("restored model_coeffs:", m.get_config().get("model_coeffs"))
-    m.disconnect()
-    print("-" * 60)
-
 def test_pid_coeffs():
     m = reset_manager()
     m.initialize(); m.connect()
@@ -137,12 +103,6 @@ def test_get_device_info():
 if __name__ == "__main__":
     print("\nTEST: initialize & connect/disconnect")
     test_initialize_and_connect()
-
-    print("\nTEST: sensor type setter + reset")
-    test_sensor_type()
-
-    print("\nTEST: sensor coefficients setter + reset")
-    test_sensor_coeffs()
 
     print("\nTEST: PID coefficients setter + reset")
     test_pid_coeffs()

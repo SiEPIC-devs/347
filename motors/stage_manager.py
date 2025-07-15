@@ -70,7 +70,7 @@ class StageManager:
         """Async context manager entry"""
         return self
 
-    async def __aexit__(self):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Proper async cleanup with context manager exit"""
         await self.cleanup()
 
@@ -583,47 +583,47 @@ class StageManager:
 
     ## ZOMBIE METHODS
 
-    # @update_stage_position
-    # async def update_params(self) -> bool:
-    #     """
-    #     Updates params of a stage from shared memory
-    #     """
-    #     for axis, motor in self.motors.items():
-    #         if not self.motors[axis]._is_homed:
-    #             logger.error(f"{axis.name} isn't homed - aborting load of params")
-    #             break
+    @update_stage_position
+    async def update_params(self) -> bool:
+        """
+        Updates params of a stage from shared memory
+        """
+        for axis, motor in self.motors.items():
+            if not self.motors[axis]._is_homed:
+                logger.error(f"{axis.name} isn't homed - aborting load of params")
+                break
 
-    #     # Apply profiles
-    #     cfg = self.config  
+        # Apply profiles
+        cfg = self.config  
 
-    #     for axis, target in cfg.initial_positions.items():
-    #         print(f"axis: {axis.name} target: {target}")
-    #         ok = await self._safe_execute(f"move_absolute {axis.name}",
-    #                 self.motors[axis].move_absolute(target, velocity=cfg.velocities[axis], wait_for_completion=True))
-    #         if not ok:
-    #             return ok
-    #     return True
+        for axis, target in cfg.initial_positions.items():
+            print(f"axis: {axis.name} target: {target}")
+            ok = await self._safe_execute(f"move_absolute {axis.name}",
+                    self.motors[axis].move_absolute(target, velocity=cfg.velocities[axis], wait_for_completion=True))
+            if not ok:
+                return ok
+        return True
 
-    # @update_stage_position
-    # async def load_params(self) -> bool:
-    #     """
-    #     Loads preset params of a stage
-    #     """
-    #     # Check if homed
-    #     for axis, motor in self.motors.items():
-    #         if not self.motors[axis]._is_homed:
-    #             logger.error(f"{axis.name} isn't homed - aborting load of params")
-    #             break
+    @update_stage_position
+    async def load_params(self) -> bool:
+        """
+        Loads preset params of a stage
+        """
+        # Check if homed
+        for axis, motor in self.motors.items():
+            if not self.motors[axis]._is_homed:
+                logger.error(f"{axis.name} isn't homed - aborting load of params")
+                break
 
-    #     # Intialize params
-    #     cfg = self.config
+        # Intialize params
+        cfg = self.config
         
-    #     # Apply profiles
-    #     for axis, target in cfg.initial_positions.items():
-    #         print(f"axis: {axis.name} target: {target}")
-    #         ok = await self._safe_execute(f"move_absolute {axis.name}",
-    #                 self.motors[axis].move_absolute(target, velocity=cfg.velocities[axis], wait_for_completion=True))
-    #         if not ok:
-    #             return ok
+        # Apply profiles
+        for axis, target in cfg.initial_positions.items():
+            print(f"axis: {axis.name} target: {target}")
+            ok = await self._safe_execute(f"move_absolute {axis.name}",
+                    self.motors[axis].move_absolute(target, velocity=cfg.velocities[axis], wait_for_completion=True))
+            if not ok:
+                return ok
         
-    #     return True
+        return True
