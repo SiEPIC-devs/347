@@ -1,6 +1,6 @@
 from typing import Type, Dict
 import inspect
-from LDC.hal.ldc_hal import LdcHAL
+from LDC.hal.LDC_hal import LdcHAL
 
 """
 Created by Cameron Basara, 7/15/2025

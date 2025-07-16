@@ -3,27 +3,14 @@ import logging
 from time import sleep
 from typing import Dict, Any
 
-from LDC.hal.ldc_hal import LdcHAL
-"""
-Made by: Cameron Basara, 7/14/2025
-
-LDC 502 controller wrapped by HAL to be used at 347 Stage. Does not support LD controller
-"""
+from LDC.hal.LDC_hal import LdcHAL, LDCEventType
 
 """
-try:
-
-except Exception as e:
-        logger.error(f"[]Caught Exception: {e}")
-        return False
-
+LDC Controller - SRS LDC 502
+Cameron Basara, 2025
 """
 
 # Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 class SrsLdc502(LdcHAL):
@@ -36,6 +23,7 @@ class SrsLdc502(LdcHAL):
         model_coeffs: list[float],
         pid_coeffs: list[float],
         temp_setpoint: float,
+        debug: bool = False
     ):
         super().__init__()
         self._visa_addr = visa_address
@@ -43,43 +31,64 @@ class SrsLdc502(LdcHAL):
         self._pid_p, self._pid_i, self._pid_d = pid_coeffs
         self._model_A, self._model_B, self._model_C = model_coeffs
         self._temp_setpoint = temp_setpoint
+        self._debug = debug
         self._rm = pyvisa.ResourceManager() 
-        self._inst = None # Opened visa ressource
+        self._inst = None
+
+    def _log(self, message: str, level: str = "info"):
+        """Simple logging that respects debug flag"""
+        if self._debug:
+            print(f"[LDC] {message}")
+        elif level == "error":
+            logger.error(f"[LDC] {message}")
 
     def connect(self) -> bool:
         """Open VISA session and basic instrument init."""
         try:
             self._inst = self._rm.open_resource(
                 self._visa_addr,
-                baud_rate=9600,  # Manual says this doesn't matter, but 9600 is common
+                baud_rate=9600,
                 timeout=5000,
-                write_termination='\n',  # Commands must be terminated with CR or LF
+                write_termination='\n',
                 read_termination='\n',
             )
-            # Connector in 347 has PROLOGIX GPIB-USB controller, params need to be conf
+            
+            # Configure PROLOGIX GPIB-USB controller
             self._inst.write('++mode 1')
             sleep(0.1)
             self._inst.write(f'++addr {2}')
             sleep(0.1)
-            self._inst.write('++auto 1') # auto read responses after sending cmds
+            self._inst.write('++auto 1')
             sleep(0.1)
-            self._inst.write('++eoi 1') # Enable EOI assertion w last char
+            self._inst.write('++eoi 1')
             sleep(0.1)
-            self._inst.write('++eos 0')  # Set GPIB term CR+LF
+            self._inst.write('++eos 0')
             sleep(0.1)
-            self._inst.write('++read_tmo_ms 3000') # time out set to 3s
+            self._inst.write('++read_tmo_ms 3000')
             sleep(0.1)
 
+            # Test connection
             self._inst.write('*IDN?')
-            resp = self._inst.read() # read IDN query
-            print(f"Connected to {resp.strip()}")
+            resp = self._inst.read()
+            self._log(f"Connected to {resp.strip()}")
 
             self.connected = True 
-            logger.info("Successfully connected to device")
+            
+            # Emit connection event
+            self._emit_event(LDCEventType.CONNECTION_CHANGED, {
+                'connected': True,
+                'device_id': resp.strip()
+            })
+            
             return True
         
         except Exception as e:
-            logger.error(f"Connection error {e}")
+            self._log(f"Connection error: {e}", "error")
+            self.connected = False
+            self._emit_event(LDCEventType.CONNECTION_CHANGED, {
+                'connected': False,
+                'error': str(e)
+            })
             return False
         
     def disconnect(self) -> bool:
@@ -87,16 +96,37 @@ class SrsLdc502(LdcHAL):
         try:
             if self._inst:
                 try:
-                    self._inst.write("TEON 0") # only power off TEC for this Stage
+                    # Turn off TEC safely before disconnecting
+                    self._inst.write("TEON 0")
+                    sleep(0.1)
+                    
+                    # Emit TEC off event
+                    self._emit_event(LDCEventType.TEC_OFF, {
+                        'reason': 'disconnect'
+                    })
                 except Exception:
                     pass
+                    
                 self._inst.close()
+            
             self._rm.close()
             self.connected = False
-            logger.info("Successfully disconnected to TEC and Powered off")
+            
+            # Emit disconnect event
+            self._emit_event(LDCEventType.CONNECTION_CHANGED, {
+                'connected': False,
+                'reason': 'user_disconnect'
+            })
+            
+            self._log("Disconnected and TEC powered off")
             return True
+            
         except Exception as e:
-            logger.error(f"Error on disconnect {e}")
+            self._log(f"Disconnect error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'disconnect',
+                'error': str(e)
+            })
             return False
 
     def get_config(self) -> Dict[str, Any]:
@@ -109,26 +139,43 @@ class SrsLdc502(LdcHAL):
                 'model_coeffs': [self._model_A, self._model_B, self._model_C],
                 'setpoint': self._temp_setpoint,
                 'connected': getattr(self, 'connected', False),
-                'driver_type': 'srs_ldc_502'
+                'driver_type': 'srs_ldc_502_fixed'
             }
         except Exception as e:
-            logger.error(f"[GET_CONFIG] Caught Exception: {e}")
+            self._log(f"Get config error: {e}", "error")
             return {}
     
-    # TEC controller
+    # === TEC Controller ===
+    
     def tec_on(self) -> bool:
         """Turn on TEC"""
         try:
             self._inst.write("TEON 1")
             sleep(0.1)
+            
+            # Verify TEC is on
             if self.tec_status():
-                logger.info("TEC on")
+                self._log("TEC turned on")
+                
+                # Emit TEC on event
+                self._emit_event(LDCEventType.TEC_ON, {
+                    'temperature_setpoint': self._temp_setpoint
+                })
                 return True
             else:
-                logger.warning("TEC on failed")
+                self._log("TEC on command failed", "error")
+                self._emit_event(LDCEventType.ERROR, {
+                    'operation': 'tec_on',
+                    'error': 'TEC failed to turn on'
+                })
                 return False
+                
         except Exception as e:
-            logger.error(f"[TEC_ON] Caught Exception: {e}")
+            self._log(f"TEC on error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'tec_on',
+                'error': str(e)
+            })
             return False
 
     def tec_off(self) -> bool:
@@ -136,14 +183,30 @@ class SrsLdc502(LdcHAL):
         try:
             self._inst.write("TEON 0")
             sleep(0.1)
+            
+            # Verify TEC is off
             if not self.tec_status():
-                logger.info("TEC off")
+                self._log("TEC turned off")
+                
+                # Emit TEC off event
+                self._emit_event(LDCEventType.TEC_OFF, {
+                    'reason': 'user_command'
+                })
                 return True
             else:
-                logger.warning("TEC off failed")
+                self._log("TEC off command failed", "error")
+                self._emit_event(LDCEventType.ERROR, {
+                    'operation': 'tec_off',
+                    'error': 'TEC failed to turn off'
+                })
                 return False
+                
         except Exception as e:
-            logger.error(f"[TEC_OFF] Caught Exception: {e}")
+            self._log(f"TEC off error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'tec_off',
+                'error': str(e)
+            })
             return False
 
     def tec_status(self) -> bool:
@@ -153,14 +216,16 @@ class SrsLdc502(LdcHAL):
             sleep(0.1)
             resp = self._inst.read()
             
-            if resp.strip() == "1":
-                return True
-            elif resp.strip() == "0":
-                return False
-            else:
-                raise Exception("Unknown TEC response")
+            status = resp.strip() == "1"
+            self._log(f"TEC status: {'ON' if status else 'OFF'}")
+            return status
+            
         except Exception as e:
-            logger.error(f"[TEC_STATUS] Caught Exception: {e}")
+            self._log(f"TEC status error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'tec_status',
+                'error': str(e)
+            })
             return False
 
     def get_temp(self) -> float:
@@ -169,114 +234,220 @@ class SrsLdc502(LdcHAL):
             self._inst.write("TTRD?")
             sleep(0.1)
             resp = self._inst.read()
-            resp = float(resp.strip())
-            logger.info(f"Got temp: {resp}")
-            return resp
+            temp = float(resp.strip())
+            
+            self._log(f"Temperature: {temp}°C")
+            
+            # Emit temperature reading event
+            self._emit_event(LDCEventType.TEMP_CHANGED, {
+                'temperature': temp,
+                'units': 'celsius'
+            })
+            
+            return temp
+            
         except Exception as e:
-            logger.error(f"[GET_TEMP] Caught Exception: {e}")
+            self._log(f"Temperature read error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'get_temp',
+                'error': str(e)
+            })
             return None
    
     def set_temp(self, temperature: float) -> bool:
         """Set desired temperature"""
         try:
-            # Check temp lims at stage
+            # Check temperature limits
             if temperature > 75.0 or temperature < 15.0:
-                raise Exception("Temperature surpases limits (15-75) C")
+                raise ValueError("Temperature outside safe limits (15-75°C)")
+            
+            old_setpoint = self._temp_setpoint
             
             self._inst.write(f"TEMP {temperature}")
             sleep(0.1)
-            t = self.get_temp()
-            logger.info(f"Temp set: {t}")
+            
+            # Update internal setpoint
+            self._temp_setpoint = temperature
+            
+            # Verify by reading back
+            current_temp = self.get_temp()
+            
+            self._log(f"Temperature setpoint changed: {old_setpoint}°C -> {temperature}°C")
+            
+            # Emit setpoint change event
+            self._emit_event(LDCEventType.TEMP_SETPOINT_CHANGED, {
+                'old_setpoint': old_setpoint,
+                'new_setpoint': temperature,
+                'current_temp': current_temp
+            })
+            
             return True
+            
         except Exception as e:
-                logger.error(f"[SET_TEMP] Caught Exception: {e}")
-                return False
+            self._log(f"Set temperature error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'set_temp',
+                'target_temp': temperature,
+                'error': str(e)
+            })
+            return False
    
     def set_sensor_type(self, sensor_type: str) -> bool:
         """Configure for sensor models on LDC 50x devices"""
         try:
-            self._inst.write(f"TMDN {sensor_type}") # no return available
+            old_type = self._sensor_type
+            
+            self._inst.write(f"TMDN {sensor_type}")
+            sleep(0.1)
+            
+            self._sensor_type = sensor_type
+            self._log(f"Sensor type changed: {old_type} -> {sensor_type}")
+            
+            # Emit configuration change event
+            self._emit_event(LDCEventType.CONFIG_CHANGED, {
+                'parameter': 'sensor_type',
+                'old_value': old_type,
+                'new_value': sensor_type
+            })
+            
             return True
+            
         except Exception as e:
-                logger.error(f"[SET_SENSOR_TYPE] Caught Exception: {e}")
-                return False
+            self._log(f"Set sensor type error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'set_sensor_type',
+                'sensor_type': sensor_type,
+                'error': str(e)
+            })
+            return False
     
     def configure_sensor_coeffs(self, coeffs: list[float]) -> bool:
         """Set the coefficients for whichever sensor model is configured"""
         try:
-            # Write for MODEL A,B,C specific to stage
-            self._inst.write(f"TSHA {str(coeffs[0])}")
+            if len(coeffs) != 3:
+                raise ValueError("Expected 3 coefficients [A, B, C]")
+            
+            old_coeffs = [self._model_A, self._model_B, self._model_C]
+            
+            # Set coefficients
+            self._inst.write(f"TSHA {coeffs[0]}")
             sleep(0.2)
-            self._inst.write(f"TSHB {str(coeffs[1])}")
+            self._inst.write(f"TSHB {coeffs[1]}")
             sleep(0.2)
-            self._inst.write(f"TSHC {str(coeffs[2])}")
+            self._inst.write(f"TSHC {coeffs[2]}")
             sleep(0.2)
+            
+            # Update internal values
+            self._model_A, self._model_B, self._model_C = coeffs
+            
+            self._log(f"Sensor coefficients updated: A={coeffs[0]}, B={coeffs[1]}, C={coeffs[2]}")
+            
+            # Emit configuration change event
+            self._emit_event(LDCEventType.CONFIG_CHANGED, {
+                'parameter': 'sensor_coeffs',
+                'old_value': old_coeffs,
+                'new_value': coeffs
+            })
+            
             return True
+            
         except Exception as e:
-                logger.error(f"[CONF_SENSOR_COEFFS] Caught Exception: {e}")
-                return False
+            self._log(f"Configure sensor coeffs error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'configure_sensor_coeffs',
+                'coeffs': coeffs,
+                'error': str(e)
+            })
+            return False
 
     def configure_PID_coeffs(self, coeffs: list[float]) -> bool:
         """Set the coefficients for PID control"""
         try:
-            # Write for P,I,D specific to stage
-            self._inst.write(f"TPGN {str(coeffs[0])}")
+            if len(coeffs) != 3:
+                raise ValueError("Expected 3 coefficients [P, I, D]")
+            
+            old_coeffs = [self._pid_p, self._pid_i, self._pid_d]
+            
+            # Set PID coefficients
+            self._inst.write(f"TPGN {coeffs[0]}")
             sleep(0.2)
-            self._inst.write(f"TIGN {str(coeffs[1])}")
+            self._inst.write(f"TIGN {coeffs[1]}")
             sleep(0.2)
-            self._inst.write(f"TDGN {str(coeffs[2])}")
+            self._inst.write(f"TDGN {coeffs[2]}")
             sleep(0.2)
+            
+            # Update internal values
+            self._pid_p, self._pid_i, self._pid_d = coeffs
+            
+            self._log(f"PID coefficients updated: P={coeffs[0]}, I={coeffs[1]}, D={coeffs[2]}")
+            
+            # Emit configuration change event
+            self._emit_event(LDCEventType.CONFIG_CHANGED, {
+                'parameter': 'pid_coeffs',
+                'old_value': old_coeffs,
+                'new_value': coeffs
+            })
+            
             return True
+            
         except Exception as e:
-                logger.error(f"[CONF_PID] Caught Exception: {e}")
-                return False
+            self._log(f"Configure PID coeffs error: {e}", "error")
+            self._emit_event(LDCEventType.ERROR, {
+                'operation': 'configure_pid_coeffs',
+                'coeffs': coeffs,
+                'error': str(e)
+            })
+            return False
      
-     # LD controller
-
+    # === LD Controller (Stubs) ===
+    # These are not implemented for the 347 stage but required by the HAL
+    
     def ldc_on(self) -> bool:
-        """Turn LDC on"""
-        pass
+        """Turn LDC on - Not implemented for 347 stage"""
+        self._log("LDC control not implemented for this stage", "error")
+        return False
     
     def ldc_off(self) -> bool:
-        """Turn LDC off"""
-        pass
+        """Turn LDC off - Not implemented for 347 stage"""
+        self._log("LDC control not implemented for this stage", "error")
+        return False
     
     def ldc_state(self) -> str:
-        """Check state of LDC"""
-        pass
+        """Check state of LDC - Not implemented for 347 stage"""
+        return "not_implemented"
     
     def set_voltage_limit(self, limit: float) -> bool:
-        """Set voltage limit"""
-        pass
+        """Set voltage limit - Not implemented for 347 stage"""
+        return False
     
     def get_voltage_limit(self) -> float:
-        """Get voltage limit"""
-        pass
+        """Get voltage limit - Not implemented for 347 stage"""
+        return 0.0
     
     def set_current_limit(self, limit: float) -> bool:
-        """Set current limit"""
-        pass
+        """Set current limit - Not implemented for 347 stage"""
+        return False
     
     def get_current_limit(self) -> float:
-        """Get current limit"""
-        pass
+        """Get current limit - Not implemented for 347 stage"""
+        return 0.0
     
     def set_current(self, current: float) -> bool:
-        """Configure current setpoints"""
-        pass
+        """Configure current setpoints - Not implemented for 347 stage"""
+        return False
     
     def get_current(self) -> float:
-        """Read current"""
-        pass
+        """Read current - Not implemented for 347 stage"""
+        return 0.0
     
     def get_voltage(self) -> float:
-        """Read voltage"""
-        pass
+        """Read voltage - Not implemented for 347 stage"""
+        return 0.0
     
     def set_current_range(self, toggle: int) -> bool:
-        """Set range to be either High or Low"""
-        pass
+        """Set range to be either High or Low - Not implemented for 347 stage"""
+        return False
 
-
-from LDC.hal.ldc_factory import register_driver
+# Register the fixed driver
+from LDC.hal.LDC_factory import register_driver
 register_driver("srs_ldc_502", SrsLdc502)

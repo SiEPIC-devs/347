@@ -1,5 +1,4 @@
 import struct
-import ctypes
 import json
 from multiprocessing import shared_memory, Process
 from time import monotonic
