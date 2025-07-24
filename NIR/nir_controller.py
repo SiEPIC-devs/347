@@ -53,7 +53,7 @@ class Agilent8163Controller(LaserHAL):
     def __init__(self, 
                 ip_address: str,
                 ip_port: int = 5025,
-                laser_slot: int = 1,
+                laser_slot: int = 0,
                 detector_slots: List[int] = None,
                 safety_password: str = "1234",
                 instrument_id: str = None):
