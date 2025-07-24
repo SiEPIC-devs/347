@@ -1,5 +1,5 @@
 import asyncio
-from NIR.nir_controller import Agilent8163Controller
+from NIR.nir_controller_practical import Agilent8163Controller
 
 import logging
 
@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 async def test_connect():
     # First lets test the connection... does it work
-    controller = Agilent8163Controller(ip_address="10.2.137.64", detector_slots=['1'])
+    controller = Agilent8163Controller(com_port=5)
 
-    conn = await controller.connect()
+    conn = controller.connect()
     
     if conn:
         logger.info("CONNECTION SUCCESSFULL YIPPY")
@@ -19,7 +19,7 @@ async def test_connect():
         logger.info("CONNECTION FAILED :(")
         return False
 
-    disconn = await controller.disconnect()
+    disconn = controller.disconnect()
 
     if disconn:
         logger.info("DISCONNECT SUCCESSFUL TOO!")

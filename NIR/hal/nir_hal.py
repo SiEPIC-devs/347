@@ -109,12 +109,12 @@ class LaserHAL(ABC):
 
     # CONNECTION MANAGEMENT
     @abstractmethod
-    async def connect(self) -> bool:
+    def connect(self) -> bool:
         """Connect to the laser instrument"""
         pass
 
     @abstractmethod
-    async def disconnect(self) -> bool:
+    def disconnect(self) -> bool:
         """Disconnect from the laser instrument"""
         pass
     
@@ -125,105 +125,105 @@ class LaserHAL(ABC):
     
     # LASER SOURCE
     @abstractmethod
-    async def set_wavelength(self, wavelength: float) -> bool:
+    def set_wavelength(self, wavelength: float) -> bool:
         """Set the output laser wavelength in nm"""
         pass
     
     @abstractmethod
-    async def get_wavelength(self) -> float:
+    def get_wavelength(self) -> float:
         """Get the current output laser wavelength in nm"""
         pass
     
     @abstractmethod
-    async def set_power(self, power: float, unit: PowerUnit = PowerUnit.DBM) -> bool:
+    def set_power(self, power: float, unit: PowerUnit = PowerUnit.DBM) -> bool:
         """Set the output laser power"""
         pass
     
     @abstractmethod
-    async def get_power(self) -> Tuple[float, PowerUnit]:
+    def get_power(self) -> Tuple[float, PowerUnit]:
         """Get the current output laser power"""
         pass
     
     @abstractmethod
-    async def enable_output(self, enable: bool = True) -> bool:
+    def enable_output(self, enable: bool = True) -> bool:
         """Enable or disable laser emission"""
         pass
     
     @abstractmethod
-    async def get_output_state(self) -> bool:
+    def get_output_state(self) -> bool:
         """Get current laser output enable state"""
         pass
 
     # SWEEP CONTROL
     @abstractmethod
-    async def set_sweep_state(self, enable: bool) -> bool:
+    def set_sweep_state(self, enable: bool) -> bool:
         """Enable or disable laser sweep mode"""
         pass
     
     @abstractmethod
-    async def get_sweep_state(self) -> SweepState:
+    def get_sweep_state(self) -> SweepState:
         """Get current sweep state"""
         pass
     
     @abstractmethod
-    async def set_sweep_range(self, start_nm: float, stop_nm: float) -> bool:
+    def set_sweep_range(self, start_nm: float, stop_nm: float) -> bool:
         """Set start/stop wavelength range for sweep"""
         pass
     
     @abstractmethod
-    async def get_sweep_range(self) -> WavelengthRange:
+    def get_sweep_range(self) -> WavelengthRange:
         """Get configured sweep range"""
         pass
     
     @abstractmethod
-    async def set_sweep_speed(self, speed: float) -> bool:
+    def set_sweep_speed(self, speed: float) -> bool:
         """Set wavelength sweep speed in nm/s"""
         pass
     
     @abstractmethod
-    async def get_sweep_speed(self) -> float:
+    def get_sweep_speed(self) -> float:
         """Get current sweep speed in nm/s"""
         pass
 
     # DETECTORS METHDS
     @abstractmethod
-    async def read_power(self, channel: int = 1) -> PowerReading:
+    def read_power(self, channel: int = 1) -> PowerReading:
         """Read optical power from detector channel"""
         pass
     
     @abstractmethod
-    async def set_power_unit(self, unit: PowerUnit, channel: int = 1) -> bool:
+    def set_power_unit(self, unit: PowerUnit, channel: int = 1) -> bool:
         """Set power measurement unit for detector channel"""
         pass
     
     @abstractmethod
-    async def get_power_unit(self, channel: int = 1) -> PowerUnit:
+    def get_power_unit(self, channel: int = 1) -> PowerUnit:
         """Get power measurement unit for detector channel"""
         pass
     
     @abstractmethod
-    async def set_power_range(self, range_dbm: float, channel: int = 1) -> bool:
+    def set_power_range(self, range_dbm: float, channel: int = 1) -> bool:
         """Set fixed power measurement range for detector channel"""
         pass
     
     @abstractmethod
-    async def get_power_range(self, channel: int = 1) -> float:
+    def get_power_range(self, channel: int = 1) -> float:
         """Get current power measurement range for detector channel"""
         pass
     
     @abstractmethod
-    async def enable_autorange(self, enable: bool = True, channel: int = 1) -> bool:
+    def enable_autorange(self, enable: bool = True, channel: int = 1) -> bool:
         """Enable automatic range switching for detector channel"""
         pass
     
     # DATA LOGGING 
     @abstractmethod
-    async def start_logging(self, samples: int, averaging_time: float, channel: int = 1) -> bool:
+    def start_logging(self, samples: int, averaging_time: float, channel: int = 1) -> bool:
         """Start timed or triggered power logging"""
         pass
     
     @abstractmethod
-    async def stop_logging(self, channel: int = 1) -> bool:
+    def stop_logging(self, channel: int = 1) -> bool:
         """Stop ongoing power logging"""
         pass
     
@@ -234,17 +234,17 @@ class LaserHAL(ABC):
 
     # STATUS AND CONFIG
     @abstractmethod
-    async def get_laser_state(self) -> LaserState:
+    def get_laser_state(self) -> LaserState:
         """Get current laser operational state"""
         pass
     
     @abstractmethod
-    async def get_wavelength_limits(self) -> Tuple[float, float]:
+    def get_wavelength_limits(self) -> Tuple[float, float]:
         """Get minimum and maximum wavelength limits in nm"""
         pass
     
     @abstractmethod
-    async def get_power_limits(self) -> Tuple[float, float]:
+    def get_power_limits(self) -> Tuple[float, float]:
         """Get minimum and maximum power limits"""
         pass
 
@@ -258,19 +258,19 @@ class LaserHAL(ABC):
         # 
         return success
     
-    async def start_sweep(self) -> bool:
+    def start_sweep(self) -> bool:
         """Start a wavelength sweep"""
-        return await self.set_sweep_state(True)
+        return self.set_sweep_state(True)
     
-    async def stop_sweep(self) -> bool:
+    def stop_sweep(self) -> bool:
         """Stop a wavelength sweep"""
-        return await self.set_sweep_state(False)
+        return self.set_sweep_state(False)
 
     async def wait_for_sweep_completion(self, timeout: Optional[float] = None) -> bool:
         """Waut for current sweep to complete"""
         start_time = time.monotonic()
         while True:
-            state = await self.get_sweep_state()
+            state = self.get_sweep_state()
             if state in [SweepState.STOPPED, SweepState.COMPLETED]:
                 return True
             if timeout and (time.monotonic() - start_time) > timeout:
@@ -282,9 +282,9 @@ class LaserHAL(ABC):
         """Safely shutdown the laser (disable output, stop sweeps)"""
         success = True
         try:
-            success &= await self.stop_sweep()
-            success &= await self.enable_output(False)
-            success &= await self.disconnect()
+            success &= self.stop_sweep()
+            success &= self.enable_output(False)
+            success &= self.disconnect()
         except Exception as e:
             print(f"Error during safe shutdown: {e}")
             success = False

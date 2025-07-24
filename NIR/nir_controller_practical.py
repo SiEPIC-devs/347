@@ -15,24 +15,12 @@ logging.basicConfig(level=logging.DEBUG, format='%(levelname)s - %(name)s - %(me
 logger = logging.getLogger(__name__)
 
 """
-Agilent 8163A Hardware Abstraction Layer Implementation - Practical GPIB Version
+Agilent 8163A Hardware Abstraction Layer Implementation 
 
 Cameron Basara, 2025
-
-This implementation uses PyVISA with Prologix GPIB-USB converter for communication.
-Uses asyncio only where it provides genuine benefit (long sweeps, data collection).
-Most operations are synchronous for simplicity and performance.
 """
 
-class Agilent8163ControllerPractical(LaserHAL):
-    """
-    Practical HAL implementation for Agilent 8163A Multi-slot Optical System via GPIB
-    
-    This instrument can contain multiple modules:
-        - Tunable laser sources (TLS)
-        - Power meter detector heads
-    """
-
+class Agilent8163Controller(LaserHAL):
     def __init__(self, 
                 com_port: int,
                 laser_slot: int = 0,
@@ -44,18 +32,18 @@ class Agilent8163ControllerPractical(LaserHAL):
         Initialize Agilent 8163A with GPIB communication via Prologix GPIB-USB
         
         Args:
-            com_port: COM port number for Prologix GPIB-USB converter (e.g., 3 for COM3)
+            com_port: COM port number for Prologix GPIB-USB converter
             laser_slot: Slot number containing tunable laser
             detector_slots: List of slots containing power detectors
-            safety_password: 4-digit laser safety password
-            instrument_id: Optional instrument identifier
-            timeout: Communication timeout in milliseconds
+            safety_password: 4-digit laser safety pwk
+            instrument_id: Optional instrument identifier, absolute path
+            timeout: Communication timeout in ms
         """
         super().__init__(instrument_id or f"ASRL{com_port}::INSTR")
         
         self.com_port = com_port
         self.laser_slot = laser_slot
-        self.detector_slots = detector_slots or [2] # 347 specific
+        self.detector_slots = detector_slots or ["1"] # 347 specific
         self.safety_password = safety_password
         self.timeout = timeout
 
@@ -78,8 +66,8 @@ class Agilent8163ControllerPractical(LaserHAL):
         self._logging_active = {}
         self._logged_data = {}
 
-    # Connection management - async to match HAL interface
-    async def connect(self) -> bool:
+    # Connection management
+    def connect(self) -> bool:
         """Connect to agilent mainframe via GPIB using Prologix GPIB-USB converter"""
         try:
             # Initialize PyVISA resource manager
@@ -94,40 +82,25 @@ class Agilent8163ControllerPractical(LaserHAL):
                 baud_rate=9600,
                 timeout=self.timeout,
                 write_termination='\n',
-                read_termination='\n'
+                read_termination=None
             )
             
-            # Configure Prologix GPIB-USB controller
-            time.sleep(0.1)
-            
-            # Set controller mode
-            self.instrument.write('++mode 1')
-            time.sleep(0.1)
-            
-            # Set GPIB address for the Agilent 8163A (typically address 20)
-            self.instrument.write('++addr 20')
-            time.sleep(0.1)
-            
-            # Enable auto mode
-            self.instrument.write('++auto 1')
-            time.sleep(0.1)
-            
-            # Enable EOI assertion
-            self.instrument.write('++eoi 1')
-            time.sleep(0.1)
-            
-            # Set EOS mode
-            self.instrument.write('++eos 0')
-            time.sleep(0.1)
-            
-            # Set read timeout
-            self.instrument.write('++read_tmo_ms 3000')
-            time.sleep(0.1)
-            
-            # Test connection with identity query
-            resp = self._send_command(self.cmd.identity())
+            # Clear buffer
+            self.instrument.clear()
+            time.sleep(0.2)
 
-            if "8163" in resp:
+            # Configure Prologix 
+            self.instrument.write('++mode 1') # Auto mode
+            time.sleep(0.1)
+            self.instrument.write('++addr 20') # Set gpib addr
+            time.sleep(0.1)
+            self.instrument.write('++auto 1') # Read resp after send
+            time.sleep(0.1)
+            self.instrument.write('++eos 2') # Append LF termination
+            time.sleep(0.1)
+            resp = self._send_command(self.cmd.identity()).strip() # *IDN?
+
+            if "8164" in resp:
                 self._is_connected = True
                 logger.info(f"Connected to {resp.strip()}")
 
@@ -160,13 +133,13 @@ class Agilent8163ControllerPractical(LaserHAL):
                 self.resource_manager = None
             return False
 
-    async def disconnect(self) -> bool:
+    def disconnect(self) -> bool:
         """Disconnect GPIB connection"""
         try:
             if self._is_connected and self.instrument:
                 # Safe shutdown sequence
-                await self.enable_output(False)
-                await self.stop_sweep()
+                self.enable_output(False)
+                self.stop_sweep()
                 
                 self.instrument.close()
                 self.instrument = None
@@ -183,7 +156,7 @@ class Agilent8163ControllerPractical(LaserHAL):
         
     # Communication protocols - synchronous for fast operations
     def _send_command(self, command: str, expect_response: bool = True) -> str:
-        """Send command via GPIB using PyVISA"""
+        """Send command via SCPI cmds via GPIB"""
         if not self.instrument:
             logger.error("[SEND_CMD] No GPIB connection available")
             raise RuntimeError("Not connected to instrument")
@@ -191,36 +164,14 @@ class Agilent8163ControllerPractical(LaserHAL):
         try:
             if expect_response:
                 response = self.instrument.query(command).strip()
-                self._check_and_clear_errors()
                 return response
             else:
                 self.instrument.write(command)
-                self._check_and_clear_errors()
                 return ""
                 
         except Exception as e:
             logger.error(f"GPIB command failed: {command}, Error: {e}")
             raise
-    
-    def _check_and_clear_errors(self):
-        """Error checking pattern adapted for GPIB"""
-        try:
-            error_response = self.instrument.query(self.cmd.check_error())
-            
-            # Ignore the specific "Query UNTERMINATED" error that legacy code ignores
-            if '-420,"Query UNTERMINATED"' in error_response or '420,"Query UNTERMINATED"' in error_response:
-                self.instrument.write(self.cmd.clear_status())
-                return
-            
-            # Log other errors but don't raise 
-            if error_response and "No error" not in error_response:
-                logger.error(f"Instrument error: {error_response}")
-            
-            # Always clear status 
-            self.instrument.write(self.cmd.clear_status())
-            
-        except Exception as e:
-            logger.error(f"Error checking failed: {e}")
     
     def _verify_slots(self) -> bool:
         """Verify that expected modules are installed"""
@@ -234,7 +185,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             return False
     
     ############## LASER SOURCE METHODS - Async to match HAL ##############
-    async def set_wavelength(self, wavelength: float) -> bool:
+    def set_wavelength(self, wavelength: float) -> bool:
         """Set laser wavelength, in nm"""
         try:
             self._send_command(self.cmd.clear_status(), expect_response=False)
@@ -250,7 +201,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Set wavelength failed: {e}")
             return False
     
-    async def get_wavelength(self) -> float:
+    def get_wavelength(self) -> float:
         """Get current wavelength """
         try:
             cmd = self.cmd.read_laser_wavelength(self.laser_slot)
@@ -267,7 +218,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Get wavelength failed: {e}")
             return self._current_wavelength
     
-    async def set_power(self, power: float, unit: PowerUnit = PowerUnit.DBM) -> bool:
+    def set_power(self, power: float, unit: PowerUnit = PowerUnit.DBM) -> bool:
         """Set laser power"""
         try:
             self._send_command(self.cmd.clear_status(), expect_response=False)
@@ -289,7 +240,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Set power failed: {e}")
             return False
         
-    async def get_power(self) -> Tuple[float, PowerUnit]:
+    def get_power(self) -> Tuple[float, PowerUnit]:
         """Get current power"""
         try:
             cmd = self.cmd.read_laser_power(self.laser_slot)
@@ -312,7 +263,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Get power failed: {e}")
             return self._current_power, PowerUnit.DBM
     
-    async def enable_output(self, enable: bool = True) -> bool:
+    def enable_output(self, enable: bool = True) -> bool:
         """Enable/disable laser output"""
         try:
             self._send_command(self.cmd.clear_status(), expect_response=False)
@@ -333,7 +284,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Enable output failed: {e}")
             return False
     
-    async def get_output_state(self) -> bool:
+    def get_output_state(self) -> bool:
         """Get output state"""
         try:
             cmd = self.cmd.read_laser_current(self.laser_slot)
@@ -347,7 +298,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             return self._output_enabled
 
     ############## SWEEP UTILITY METHODS - Mixed async/sync ##############
-    async def set_sweep_range(self, start_nm: float, stop_nm: float) -> bool:
+    def set_sweep_range(self, start_nm: float, stop_nm: float) -> bool:
         """Set sweep range - synchronous since it's just configuration"""
         try:
             # Set start wavelength
@@ -365,11 +316,11 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Set sweep range failed: {e}")
             return False
     
-    async def get_sweep_range(self) -> WavelengthRange:
+    def get_sweep_range(self) -> WavelengthRange:
         """Get sweep range"""
         return self._sweep_range
     
-    async def set_sweep_speed(self, speed: float) -> bool:
+    def set_sweep_speed(self, speed: float) -> bool:
         """Set sweep speed"""
         try:
             cmd = self.cmd.set_continuous_sweep_speed(self.laser_slot, f"{speed}nm/s")
@@ -382,7 +333,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Set sweep speed failed: {e}")
             return False
     
-    async def get_sweep_speed(self) -> float:
+    def get_sweep_speed(self) -> float:
         """Get sweep speed"""
         try:
             cmd = self.cmd.read_continuous_sweep_speed(self.laser_slot)
@@ -398,20 +349,20 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Get sweep speed failed: {e}")
             return self._sweep_speed
 
-    # Sweep control - async because sweeps take time
-    async def set_sweep_state(self, enable: bool) -> bool:
+    # Sweep control - because sweeps take time
+    def set_sweep_state(self, enable: bool) -> bool:
         """Enable/disable sweep state"""
         if enable:
-            return await self.start_sweep()
+            return self.start_sweep()
         else:
-            return await self.stop_sweep()
+            return self.stop_sweep()
 
-    async def start_sweep(self) -> bool:
-        """Start wavelength sweep - async because it takes time"""
+    def start_sweep(self) -> bool:
+        """Start wavelength sweep - because it takes time"""
         try:
             # Configure sweep parameters first
-            await self.set_sweep_range(self._sweep_range.start, self._sweep_range.stop)
-            await self.set_sweep_speed(self._sweep_speed)
+            self.set_sweep_range(self._sweep_range.start, self._sweep_range.stop)
+            self.set_sweep_speed(self._sweep_speed)
             
             # Set sweep mode and parameters 
             self._send_command(
@@ -445,7 +396,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Start sweep failed: {e}")
             return False
 
-    async def stop_sweep(self) -> bool:
+    def stop_sweep(self) -> bool:
         """Stop sweep - synchronous"""
         try:
             cmd = self.cmd.set_laser_sweep_state(self.laser_slot, "1", "STOP")
@@ -459,7 +410,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Stop sweep failed: {e}")
             return False
         
-    async def get_sweep_state(self) -> SweepState:
+    def get_sweep_state(self) -> SweepState:
         """Get sweep state"""
         try:
             cmd = self.cmd.read_laser_sweep_state(self.laser_slot, "1")
@@ -475,7 +426,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             return SweepState.STOPPED if not self._sweep_active else SweepState.RUNNING
 
     ############## DETECTOR METHODS - Async to match HAL ##############
-    async def read_power(self, channel: int = 1) -> PowerReading:
+    def read_power(self, channel: int = 1) -> PowerReading:
         """Read power from detector"""
         detector_slot = self._get_detector_slot(channel)
         
@@ -491,7 +442,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             # Parse power value
             power_value = float(response.strip())
             
-            wavelength = await self.get_wavelength()
+            wavelength = self.get_wavelength()
             
             return PowerReading(
                 value=power_value,
@@ -509,7 +460,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             return self.detector_slots[channel - 1]
         return self.detector_slots[0]
     
-    async def set_power_unit(self, unit: PowerUnit, channel: int = 1) -> bool:
+    def set_power_unit(self, unit: PowerUnit, channel: int = 1) -> bool:
         """Set power unit"""
         detector_slot = self._get_detector_slot(channel)
         
@@ -523,12 +474,12 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Set power unit failed: {e}")
             return False
 
-    async def get_power_unit(self, channel: int = 1) -> PowerUnit:
+    def get_power_unit(self, channel: int = 1) -> PowerUnit:
         """Get power unit"""
         # For now return default - could be enhanced to query instrument
         return PowerUnit.DBM
     
-    async def get_power_range(self, channel: int = 1) -> float:
+    def get_power_range(self, channel: int = 1) -> float:
         """Get power range"""
         detector_slot = self._get_detector_slot(channel)
         
@@ -543,7 +494,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Get power range failed: {e}")
             return 0.0
     
-    async def enable_autorange(self, enable: bool = True, channel: int = 1) -> bool:
+    def enable_autorange(self, enable: bool = True, channel: int = 1) -> bool:
         """Enable/disable autorange """
         detector_slot = self._get_detector_slot(channel)
         
@@ -556,7 +507,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Enable autorange failed: {e}")
             return False
 
-    async def set_power_range(self, range_dbm: float, channel: int = 1) -> bool:
+    def set_power_range(self, range_dbm: float, channel: int = 1) -> bool:
         """Set power range """
         detector_slot = self._get_detector_slot(channel)
         
@@ -575,8 +526,8 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Set power range failed: {e}")
             return False
 
-    ############## DATA LOGGING - Async for large datasets ##############
-    async def start_logging(self, samples: int, averaging_time: float, channel: int = 1) -> bool:
+    ############## DATA LOGGING ##############
+    def start_logging(self, samples: int, averaging_time: float, channel: int = 1) -> bool:
         """Start logging"""
         detector_slot = self._get_detector_slot(channel)
         
@@ -598,7 +549,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Start logging failed: {e}")
             return False
     
-    async def stop_logging(self, channel: int = 1) -> bool:
+    def stop_logging(self, channel: int = 1) -> bool:
         """Stop logging"""
         detector_slot = self._get_detector_slot(channel)
         
@@ -634,7 +585,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             
             # Convert to PowerReading objects
             readings = []
-            current_wavelength = await self.get_wavelength()
+            current_wavelength = self.get_wavelength()
             
             for power_value in response:
                 # Filter out obvious bad values 
@@ -655,17 +606,17 @@ class Agilent8163ControllerPractical(LaserHAL):
             return []
 
     ############## STATUS METHODS ##############
-    async def get_laser_state(self) -> LaserState:
+    def get_laser_state(self) -> LaserState:
         """Get laser state"""
         try:
             if not self._is_connected:
                 return LaserState.ERROR
             
-            output_state = await self.get_output_state()
+            output_state = self.get_output_state()
             if not output_state:
                 return LaserState.IDLE
                 
-            sweep_state = await self.get_sweep_state()
+            sweep_state = self.get_sweep_state()
             if sweep_state == SweepState.RUNNING:
                 return LaserState.SWEEPING
                 
@@ -675,7 +626,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Get laser state failed: {e}")
             return LaserState.ERROR
     
-    async def get_wavelength_limits(self) -> Tuple[float, float]:
+    def get_wavelength_limits(self) -> Tuple[float, float]:
         """Get wavelength limits"""
         try:
             min_cmd = self.cmd.read_laser_wavelength(self.laser_slot, "MIN")
@@ -693,7 +644,7 @@ class Agilent8163ControllerPractical(LaserHAL):
             logger.error(f"Get wavelength limits failed: {e}")
             return 1460.0, 1580.0  # Default from legacy code
     
-    async def get_power_limits(self) -> Tuple[float, float]:
+    def get_power_limits(self) -> Tuple[float, float]:
         """Get power limits"""
         try:
             min_cmd = self.cmd.read_laser_power(self.laser_slot, "MIN")
@@ -712,4 +663,4 @@ class Agilent8163ControllerPractical(LaserHAL):
             return -40.0, 10.0  # Default range
 
 # Register driver
-register_driver("347_NIR_PRACTICAL", Agilent8163ControllerPractical)
+register_driver("347_NIR", Agilent8163Controller)
