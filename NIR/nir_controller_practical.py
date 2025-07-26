@@ -1,5 +1,6 @@
 import pyvisa
 import time
+import math
 import struct
 import asyncio
 from typing import Optional, Tuple, List, Dict, Any
@@ -162,6 +163,8 @@ class Agilent8163Controller(LaserHAL):
             raise RuntimeError("Not connected to instrument")
         
         try:
+            # Daisy chained GPIBs, ensure correct port
+            self.instrument.write('++addr 20')
             if expect_response:
                 response = self.instrument.query(command).strip()
                 return response
@@ -202,14 +205,27 @@ class Agilent8163Controller(LaserHAL):
             return False
     
     def get_wavelength(self) -> float:
-        """Get current wavelength """
+        """Get current wavelength with proper unit handling"""
         try:
             cmd = self.cmd.read_laser_wavelength(self.laser_slot)
-            resp = self._send_command(cmd)
+            resp = self._send_command(cmd).strip()
             
-            # Parse response 
-            wavelength_str = resp.replace("nm", "").replace("NM", "").strip()
-            wavelength = float(wavelength_str)
+            # Check for unit indicators in response
+            if "nm" in resp.lower():
+                # Response includes nm unit
+                wavelength_str = resp.replace("nm", "").replace("NM", "").strip()
+                wavelength = float(wavelength_str)
+            elif "m" in resp.lower() and "nm" not in resp.lower():
+                # Response in meters, convert to nm
+                wavelength_str = resp.replace("m", "").replace("M", "").strip()
+                wavelength = float(wavelength_str) * 1e9
+            else:
+                # No unit, detect by magnitude
+                wavelength_raw = float(resp)
+                if wavelength_raw < 1e-3:  # Less than 0.001, probably meters
+                    wavelength = wavelength_raw * 1e9
+                else:
+                    wavelength = wavelength_raw
             
             self._current_wavelength = wavelength
             return wavelength
@@ -241,20 +257,46 @@ class Agilent8163Controller(LaserHAL):
             return False
         
     def get_power(self) -> Tuple[float, PowerUnit]:
-        """Get current power"""
+        """Get current power with proper unit handling"""
         try:
             cmd = self.cmd.read_laser_power(self.laser_slot)
-            response = self._send_command(cmd)
+            response = self._send_command(cmd).strip()
             
-            # Parse power and unit from response
-            if "DBM" in response.upper() or "dbm" in response:
+            # Parse based on unit indicators in response
+            if "dbm" in response.lower():
                 power_str = response.replace("DBM", "").replace("dbm", "").strip()
                 power = float(power_str)
                 unit = PowerUnit.DBM
+            elif "w" in response.lower() and "mw" not in response.lower():
+                # Watts - convert to dBm
+                power_str = response.replace("W", "").replace("w", "").strip()
+                power_watts = float(power_str)
+                if power_watts > 0:
+                    power = 10 * math.log10(power_watts) + 30  # Convert W to dBm
+                else:
+                    power = -100.0  # Very low power
+                unit = PowerUnit.DBM
+            elif "mw" in response.lower():
+                # Milliwatts - convert to dBm
+                power_str = response.replace("MW", "").replace("mw", "").replace("mW", "").strip()
+                power_mw = float(power_str)
+                if power_mw > 0:
+                    power = 10 * math.log10(power_mw)  # Convert mW to dBm
+                else:
+                    power = -100.0
+                unit = PowerUnit.DBM
             else:
-                power_str = response.replace("W", "").strip()
-                power = float(power_str)
-                unit = PowerUnit.WATTS
+                # No clear unit, detect by magnitude
+                power_raw = float(response)
+                if power_raw < 1e-3:  # Very small, probably watts
+                    power = 10 * math.log10(power_raw) + 30 if power_raw > 0 else -100.0
+                    unit = PowerUnit.DBM
+                elif power_raw < 1.0:  # Small but not tiny, probably milliwatts  
+                    power = 10 * math.log10(power_raw) if power_raw > 0 else -100.0
+                    unit = PowerUnit.DBM
+                else:
+                    power = power_raw  # Assume dBm
+                    unit = PowerUnit.DBM
             
             self._current_power = power
             return power, unit
@@ -334,17 +376,30 @@ class Agilent8163Controller(LaserHAL):
             return False
     
     def get_sweep_speed(self) -> float:
-        """Get sweep speed"""
+        """Get sweep speed with proper unit handling"""
         try:
             cmd = self.cmd.read_continuous_sweep_speed(self.laser_slot)
-            response = self._send_command(cmd)
+            response = self._send_command(cmd).strip()
             
-            speed_str = response.replace("nm/s", "").replace("NM/S", "").strip()
-            speed = float(speed_str)
+            # Parse based on unit indicators
+            if "nm/s" in response.lower():
+                speed_str = response.replace("nm/s", "").replace("NM/S", "").strip()
+                speed = float(speed_str)
+            elif "m/s" in response.lower():
+                speed_str = response.replace("m/s", "").replace("M/S", "").strip()
+                speed_ms = float(speed_str)
+                speed = speed_ms * 1e9  # Convert m/s to nm/s
+            else:
+                # No clear unit, detect by magnitude
+                speed_raw = float(response)
+                if speed_raw < 1e-6:  # Very small, probably m/s
+                    speed = speed_raw * 1e9
+                else:
+                    speed = speed_raw  # Assume nm/s
             
             self._sweep_speed = speed
             return speed
-            
+        
         except Exception as e:
             logger.error(f"Get sweep speed failed: {e}")
             return self._sweep_speed
@@ -476,20 +531,35 @@ class Agilent8163Controller(LaserHAL):
 
     def get_power_unit(self, channel: int = 1) -> PowerUnit:
         """Get power unit"""
-        # For now return default - could be enhanced to query instrument
+        # For now return default 
         return PowerUnit.DBM
     
     def get_power_range(self, channel: int = 1) -> float:
-        """Get power range"""
+        """Get power range with proper unit handling"""
         detector_slot = self._get_detector_slot(channel)
         
         try:
             cmd = self.cmd.read_power_sensor_range(detector_slot, channel)
-            response = self._send_command(cmd)
+            response = self._send_command(cmd).strip()
             
-            range_str = response.replace("DBM", "").replace("dbm", "").strip()
-            return float(range_str)
+            # Parse power range based on units
+            if "dbm" in response.lower():
+                range_value = float(response.replace("DBM", "").replace("dbm", "").strip())
+            elif "w" in response.lower() and "mw" not in response.lower():
+                range_watts = float(response.replace("W", "").replace("w", "").strip())
+                range_value = 10 * math.log10(range_watts) + 30 if range_watts > 0 else -100.0
+            elif "mw" in response.lower():
+                range_mw = float(response.replace("MW", "").replace("mw", "").replace("mW", "").strip())
+                range_value = 10 * math.log10(range_mw) if range_mw > 0 else -100.0
+            else:
+                range_raw = float(response)
+                if range_raw < 1e-3:
+                    range_value = 10 * math.log10(range_raw) + 30 if range_raw > 0 else -100.0
+                else:
+                    range_value = range_raw
             
+            return range_value
+        
         except Exception as e:
             logger.error(f"Get power range failed: {e}")
             return 0.0
@@ -627,40 +697,86 @@ class Agilent8163Controller(LaserHAL):
             return LaserState.ERROR
     
     def get_wavelength_limits(self) -> Tuple[float, float]:
-        """Get wavelength limits"""
+        """Get wavelength limits with proper unit handling"""
         try:
             min_cmd = self.cmd.read_laser_wavelength(self.laser_slot, "MIN")
             max_cmd = self.cmd.read_laser_wavelength(self.laser_slot, "MAX")
             
-            min_response = self._send_command(min_cmd)
-            max_response = self._send_command(max_cmd)
+            min_response = self._send_command(min_cmd).strip()
+            max_response = self._send_command(max_cmd).strip()
             
-            min_wl = float(min_response.replace("nm", "").strip())
-            max_wl = float(max_response.replace("nm", "").strip())
+            # Handle min wavelength
+            if "nm" in min_response.lower():
+                min_wl = float(min_response.replace("nm", "").replace("NM", "").strip())
+            elif "m" in min_response.lower():
+                min_wl_m = float(min_response.replace("m", "").replace("M", "").strip())
+                min_wl = min_wl_m * 1e9  # Convert m to nm
+            else:
+                min_wl_raw = float(min_response)
+                min_wl = min_wl_raw * 1e9 if min_wl_raw < 1e-3 else min_wl_raw
+            
+            # Handle max wavelength
+            if "nm" in max_response.lower():
+                max_wl = float(max_response.replace("nm", "").replace("NM", "").strip())
+            elif "m" in max_response.lower():
+                max_wl_m = float(max_response.replace("m", "").replace("M", "").strip())
+                max_wl = max_wl_m * 1e9  # Convert m to nm
+            else:
+                max_wl_raw = float(max_response)
+                max_wl = max_wl_raw * 1e9 if max_wl_raw < 1e-3 else max_wl_raw
             
             return min_wl, max_wl
             
         except Exception as e:
             logger.error(f"Get wavelength limits failed: {e}")
-            return 1460.0, 1580.0  # Default from legacy code
+            return 1460.0, 1580.0 # defailt from leg code
     
     def get_power_limits(self) -> Tuple[float, float]:
-        """Get power limits"""
+        """Get power limits with proper unit handling"""
         try:
             min_cmd = self.cmd.read_laser_power(self.laser_slot, "MIN")
             max_cmd = self.cmd.read_laser_power(self.laser_slot, "MAX")
             
-            min_response = self._send_command(min_cmd)
-            max_response = self._send_command(max_cmd)
+            min_response = self._send_command(min_cmd).strip()
+            max_response = self._send_command(max_cmd).strip()
             
-            min_power = float(min_response.replace("DBM", "").replace("dbm", "").strip())
-            max_power = float(max_response.replace("DBM", "").replace("dbm", "").strip())
+            # Handle min power
+            if "dbm" in min_response.lower():
+                min_power = float(min_response.replace("DBM", "").replace("dbm", "").strip())
+            elif "w" in min_response.lower() and "mw" not in min_response.lower():
+                min_watts = float(min_response.replace("W", "").replace("w", "").strip())
+                min_power = 10 * math.log10(min_watts) + 30 if min_watts > 0 else -100.0
+            elif "mw" in min_response.lower():
+                min_mw = float(min_response.replace("MW", "").replace("mw", "").replace("mW", "").strip())
+                min_power = 10 * math.log10(min_mw) if min_mw > 0 else -100.0
+            else:
+                min_raw = float(min_response)
+                if min_raw < 1e-3:
+                    min_power = 10 * math.log10(min_raw) + 30 if min_raw > 0 else -100.0
+                else:
+                    min_power = min_raw
+            
+            # Handle max power
+            if "dbm" in max_response.lower():
+                max_power = float(max_response.replace("DBM", "").replace("dbm", "").strip())
+            elif "w" in max_response.lower() and "mw" not in max_response.lower():
+                max_watts = float(max_response.replace("W", "").replace("w", "").strip())
+                max_power = 10 * math.log10(max_watts) + 30 if max_watts > 0 else -100.0
+            elif "mw" in max_response.lower():
+                max_mw = float(max_response.replace("MW", "").replace("mw", "").replace("mW", "").strip())
+                max_power = 10 * math.log10(max_mw) if max_mw > 0 else -100.0
+            else:
+                max_raw = float(max_response)
+                if max_raw < 1e-3:
+                    max_power = 10 * math.log10(max_raw) + 30 if max_raw > 0 else -100.0
+                else:
+                    max_power = max_raw
             
             return min_power, max_power
             
         except Exception as e:
             logger.error(f"Get power limits failed: {e}")
-            return -40.0, 10.0  # Default range
+            return -40.0, 10.0
 
 # Register driver
 register_driver("347_NIR", Agilent8163Controller)
