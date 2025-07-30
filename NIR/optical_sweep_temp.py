@@ -536,94 +536,94 @@ class LambdaScanProtocol:
             logging.error(f"Error during disconnect: {e}")
 
 
-def test_lambda_scan_with_diagnostics():
-    """Test the lambda scan with enhanced diagnostics"""
-    print("=" * 60)
-    print("LAMBDA SCAN WITH DIAGNOSTICS")
-    print("=" * 60)
+# def test_lambda_scan_with_diagnostics():
+#     """Test the lambda scan with enhanced diagnostics"""
+#     print("=" * 60)
+#     print("LAMBDA SCAN WITH DIAGNOSTICS")
+#     print("=" * 60)
     
-    scanner = LambdaScanProtocol(com_port=5)  # Adjust your COM port
+#     scanner = LambdaScanProtocol(com_port=5)  # Adjust your COM port
     
-    try:
-        # Connect
-        print("Step 1: Connecting...")
-        if not scanner.connect():
-            print("❌ Connection failed")
-            return False
-        print("✅ Connected")
+#     try:
+#         # Connect
+#         print("Step 1: Connecting...")
+#         if not scanner.connect():
+#             print("❌ Connection failed")
+#             return False
+#         print("✅ Connected")
         
-        # Setup with smaller range for testing
-        print("\nStep 2: Setup (with diagnostics)...")
-        if scanner.setup_lambda_scan(
-            start_nm=1530, 
-            stop_nm=1535,
-            step_nm=1.0,  # Even larger steps for testing
-            laser_power_dbm=-5,  # Higher power for better signal
-            averaging_time_s=0.02
-        ):
-            print("✅ Setup complete")
-        else:
-            print("❌ Setup failed")
-            return False
+#         # Setup with smaller range for testing
+#         print("\nStep 2: Setup (with diagnostics)...")
+#         if scanner.setup_lambda_scan(
+#             start_nm=1530, 
+#             stop_nm=1535,
+#             step_nm=1.0,  # Even larger steps for testing
+#             laser_power_dbm=-5,  # Higher power for better signal
+#             averaging_time_s=0.02
+#         ):
+#             print("✅ Setup complete")
+#         else:
+#             print("❌ Setup failed")
+#             return False
         
-        # Configure triggering
-        print("\nStep 3: Configure triggering...")
-        if scanner.configure_internal_triggering():
-            print("✅ Triggering configured")
-        else:
-            print("❌ Triggering failed")
-            return False
+#         # Configure triggering
+#         print("\nStep 3: Configure triggering...")
+#         if scanner.configure_internal_triggering():
+#             print("✅ Triggering configured")
+#         else:
+#             print("❌ Triggering failed")
+#             return False
         
-        # Execute scan
-        print("\nStep 4: Execute scan...")
-        if scanner.execute_lambda_scan():
-            print("✅ Scan executed")
-        else:
-            print("❌ Scan failed")
-            return False
+#         # Execute scan
+#         print("\nStep 4: Execute scan...")
+#         if scanner.execute_lambda_scan():
+#             print("✅ Scan executed")
+#         else:
+#             print("❌ Scan failed")
+#             return False
         
-        # Retrieve data
-        print("\nStep 5: Retrieve data...")
-        wavelengths, power_ch1, power_ch2 = scanner.retrieve_scan_data()
+#         # Retrieve data
+#         print("\nStep 5: Retrieve data...")
+#         wavelengths, power_ch1, power_ch2 = scanner.retrieve_scan_data()
         
-        if wavelengths is not None:
-            print("✅ Data retrieved")
-            print(f"   Points: {len(wavelengths)}")
-            print(f"   Wavelengths: {wavelengths[0]:.1f} - {wavelengths[-1]:.1f} nm")
+#         if wavelengths is not None:
+#             print("✅ Data retrieved")
+#             print(f"   Points: {len(wavelengths)}")
+#             print(f"   Wavelengths: {wavelengths[0]:.1f} - {wavelengths[-1]:.1f} nm")
             
-            # Check for valid data
-            valid_ch1 = ~np.isnan(power_ch1) & (np.abs(power_ch1) < 1e10)
-            valid_ch2 = ~np.isnan(power_ch2) & (np.abs(power_ch2) < 1e10)
+#             # Check for valid data
+#             valid_ch1 = ~np.isnan(power_ch1) & (np.abs(power_ch1) < 1e10)
+#             valid_ch2 = ~np.isnan(power_ch2) & (np.abs(power_ch2) < 1e10)
             
-            if np.any(valid_ch1):
-                print(f"   Ch1 range: {np.min(power_ch1[valid_ch1]):.2f} - {np.max(power_ch1[valid_ch1]):.2f} dBm")
-            else:
-                print("   Ch1: No valid data")
+#             if np.any(valid_ch1):
+#                 print(f"   Ch1 range: {np.min(power_ch1[valid_ch1]):.2f} - {np.max(power_ch1[valid_ch1]):.2f} dBm")
+#             else:
+#                 print("   Ch1: No valid data")
                 
-            if np.any(valid_ch2):
-                print(f"   Ch2 range: {np.min(power_ch2[valid_ch2]):.2f} - {np.max(power_ch2[valid_ch2]):.2f} dBm")
-            else:
-                print("   Ch2: No valid data")
+#             if np.any(valid_ch2):
+#                 print(f"   Ch2 range: {np.min(power_ch2[valid_ch2]):.2f} - {np.max(power_ch2[valid_ch2]):.2f} dBm")
+#             else:
+#                 print("   Ch2: No valid data")
             
-            print("\nSample points:")
-            for i in range(0, len(wavelengths), max(1, len(wavelengths)//3)):
-                ch1_val = f"{power_ch1[i]:.2f}" if valid_ch1[i] else "INVALID"
-                ch2_val = f"{power_ch2[i]:.2f}" if valid_ch2[i] else "INVALID"
-                print(f"   {wavelengths[i]:.1f}nm: Ch1={ch1_val}dBm, Ch2={ch2_val}dBm")
+#             print("\nSample points:")
+#             for i in range(0, len(wavelengths), max(1, len(wavelengths)//3)):
+#                 ch1_val = f"{power_ch1[i]:.2f}" if valid_ch1[i] else "INVALID"
+#                 ch2_val = f"{power_ch2[i]:.2f}" if valid_ch2[i] else "INVALID"
+#                 print(f"   {wavelengths[i]:.1f}nm: Ch1={ch1_val}dBm, Ch2={ch2_val}dBm")
                 
-        else:
-            print("❌ Data retrieval failed")
-            return False
+#         else:
+#             print("❌ Data retrieval failed")
+#             return False
         
-        print("\n✅ LAMBDA SCAN TEST COMPLETED!")
-        return True
+#         print("\n✅ LAMBDA SCAN TEST COMPLETED!")
+#         return True
         
-    except Exception as e:
-        print(f"❌ Test failed: {e}")
-        return False
-    finally:
-        scanner.disconnect()
+#     except Exception as e:
+#         print(f"❌ Test failed: {e}")
+#         return False
+#     finally:
+#         scanner.disconnect()
 
 
-if __name__ == "__main__":
-    test_lambda_scan_with_diagnostics()
+# if __name__ == "__main__":
+#     test_lambda_scan_with_diagnostics()
