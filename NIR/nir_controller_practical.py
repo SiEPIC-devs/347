@@ -155,9 +155,9 @@ class Agilent8163Controller(LaserHAL):
             logger.error(f"Disconnect failed: {e}")
             return False
         
-    # Communication protocols - synchronous for fast operations
+    # Communication protocols 
     def _send_command(self, command: str, expect_response: bool = True) -> str:
-        """Send command via SCPI cmds via GPIB"""
+        """Send SCPI cmds via GPIB"""
         if not self.instrument:
             logger.error("[SEND_CMD] No GPIB connection available")
             raise RuntimeError("Not connected to instrument")
@@ -166,8 +166,10 @@ class Agilent8163Controller(LaserHAL):
             # Daisy chained GPIBs, ensure correct port
             self.instrument.write('++addr 20')
             if expect_response:
-                response = self.instrument.query(command).strip()
-                return response
+                self.instrument.write(command)
+                time.sleep(0.05)  # small delay
+                self.instrument.write('++read eoi')  # Prologix read trigger
+                return self.instrument.read().strip()
             else:
                 self.instrument.write(command)
                 return ""
@@ -187,7 +189,7 @@ class Agilent8163Controller(LaserHAL):
             logger.error(f"Slot verification failed: {e}")
             return False
     
-    ############## LASER SOURCE METHODS - Async to match HAL ##############
+    ############## LASER SOURCE METHODS ##############
     def set_wavelength(self, wavelength: float) -> bool:
         """Set laser wavelength, in nm"""
         try:
@@ -452,7 +454,7 @@ class Agilent8163Controller(LaserHAL):
             return False
 
     def stop_sweep(self) -> bool:
-        """Stop sweep - synchronous"""
+        """Stop sweep"""
         try:
             cmd = self.cmd.set_laser_sweep_state(self.laser_slot, "1", "STOP")
             self._send_command(cmd, expect_response=False)
@@ -480,7 +482,7 @@ class Agilent8163Controller(LaserHAL):
             logger.error(f"Get sweep state failed: {e}")
             return SweepState.STOPPED if not self._sweep_active else SweepState.RUNNING
 
-    ############## DETECTOR METHODS - Async to match HAL ##############
+    ############## DETECTOR METHODS ##############
     def read_power(self, channel: int = 1) -> PowerReading:
         """Read power from detector"""
         detector_slot = self._get_detector_slot(channel)
@@ -635,7 +637,7 @@ class Agilent8163Controller(LaserHAL):
             return False
     
     async def get_logged_data(self, channel: int = 1) -> List[PowerReading]:
-        """Get logged data - async because large datasets take time"""
+        """Get logged data"""
         detector_slot = self._get_detector_slot(channel)
         
         try:
