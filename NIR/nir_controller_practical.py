@@ -483,9 +483,12 @@ class Agilent8163Controller(LaserHAL):
             return SweepState.STOPPED if not self._sweep_active else SweepState.RUNNING
 
     ############## DETECTOR METHODS ##############
-    def read_power(self, channel: int = 1) -> PowerReading:
+    def read_power(self, channel: int = 1):
         """Read power from detector"""
-        detector_slot = self._get_detector_slot(channel)
+        # detector_slot = self._get_detector_slot(channel)
+        # for now do it manually, read both slots
+        master_slot = 1
+        slave_slot = 2
         
         try:
             self._send_command(self.cmd.clear_status(), expect_response=False)
@@ -493,19 +496,28 @@ class Agilent8163Controller(LaserHAL):
             # Small delay for averaging
             time.sleep(0.1)
             
-            cmd = self.cmd.read_power(detector_slot, channel)
-            response = self._send_command(cmd)
+            cmd_master = self.cmd.read_power(master_slot, channel) 
+            cmd_slave = self.cmd.read_power(slave_slot, channel)
+            response_master = self._send_command(cmd_master)
+            time.sleep(0.1)
+            response_slave = self._send_command(cmd_slave)
             
             # Parse power value
-            power_value = float(response.strip())
+            power_value_master = float(response_master.strip())
+            power_value_slave = float(response_slave.strip())
             
             wavelength = self.get_wavelength()
             
-            return PowerReading(
-                value=power_value,
+            return (PowerReading(
+                value=power_value_master,
                 unit=PowerUnit.DBM,
                 wavelength=wavelength
-            )
+            ),
+            PowerReading(
+                value=power_value_slave,
+                unit=PowerUnit.DBM,
+                wavelength=wavelength
+            ))
             
         except Exception as e:
             logger.error(f"Read power failed: {e}")

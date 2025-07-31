@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 from motors.stage_manager import *
 from motors.hal.motors_hal import AxisType, Position
-from NIR.nir_manager import *
+from NIR.nir_controller_practical import *
 
 import logging
 
@@ -23,9 +23,9 @@ class AreaSweep:
     Take an optical area sweep for alignement purposes
     """
     def __init__(self, area_sweep_config: Dict[Any, Any], # place holder
-                 stage_manager: StageManager, nir_manager: NirManager):
+                 stage_manager: StageManager, nir_controller: Agilent8163Controller):
         self.stage_manager = stage_manager
-        self.nir_manager = nir_manager
+        self.nir_manager = Agilent8163Controller
         self.config = area_sweep_config
 
     async def begin_sweep(self) -> np.ndarray:
@@ -57,8 +57,8 @@ class AreaSweep:
             y_len, y_step = cfg.y_size, cfg.y_step
 
             # Initial measurement
-            loss = await self.nir_manager.sweep() # some params
-            data.append([x_pos, y_pos, loss])
+            loss_master, loss_slave = self.nir_manager.read_power() 
+            data.append([x_pos, y_pos, (loss_master, loss_slave)])
 
             parity = lambda step, n: step if (n%2) != 0 else -step  # helper for parity switchin
 
@@ -71,9 +71,9 @@ class AreaSweep:
                         relative = True,
                         wait_for_completion = True)
                     
-                    loss = await self.nir_manager.sweep() # some params                    
+                    loss_master, loss_slave = self.nir_manager.read_power() # some params
                     x_pos += step
-                    data.append([x_pos, y_pos, loss])
+                    data.append([x_pos, y_pos, (loss_master, loss_slave)])
 
                 
                 # After a row has been measured, move y axis take the initial measurement
@@ -82,9 +82,9 @@ class AreaSweep:
                         position = y_step,
                         relative = True,
                         wait_for_completion = True)
-                loss = await self.nir_manager.sweep() # some params
+                loss_master, loss_slave = self.nir_manager.read_power() # some params
                 y_pos += y_step
-                data.append([x_pos, y_pos, loss])
+                data.append([x_pos, y_pos, (loss_master, loss_slave)])
 
         
             # Once area sweep is complete, return the data as np.array
