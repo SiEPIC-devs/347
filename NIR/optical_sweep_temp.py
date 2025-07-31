@@ -107,6 +107,52 @@ class LambdaScanProtocol:
             logging.error(f"Binary query failed: {command}, Error: {e}")
             raise
     
+    def optical_sweep(self, start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s=0.02):
+        """Full sweep procedure"""
+        # Pass lambda scan params
+        self.setup_lambda_scan(start_nm, stop_nm, laser_power_dbm, averaging_time_s)
+        
+        # Configure triggering
+        self.configure_internal_triggering()
+        
+        # Execute scan
+        self.execute_lambda_scan()
+        
+        # Retrieve data
+        wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data()
+        
+        if wavelengths is not None:
+            logging.debug("Data retrieved")
+            logging.debug(f"   Points: {len(wavelengths)}")
+            logging.debug(f"   Wavelengths: {wavelengths[0]:.1f} - {wavelengths[-1]:.1f} nm")
+            
+            # Check for valid data
+            valid_ch1 = ~np.isnan(power_ch1) & (np.abs(power_ch1) < 1e10)
+            valid_ch2 = ~np.isnan(power_ch2) & (np.abs(power_ch2) < 1e10)
+            
+            if np.any(valid_ch1):
+                logging.debug(f"   Ch1 range: {np.min(power_ch1[valid_ch1]):.2f} - {np.max(power_ch1[valid_ch1]):.2f} dBm")
+            else:
+                logging.debug("   Ch1: No valid data")
+                
+            if np.any(valid_ch2):
+                logging.debug(f"   Ch2 range: {np.min(power_ch2[valid_ch2]):.2f} - {np.max(power_ch2[valid_ch2]):.2f} dBm")
+            else:
+                logging.debug("   Ch2: No valid data")
+            
+            logging.debug("\nSample points:")
+            for i in range(0, len(wavelengths), max(1, len(wavelengths)//3)):
+                ch1_val = f"{power_ch1[i]:.2f}" if valid_ch1[i] else "INVALID"
+                ch2_val = f"{power_ch2[i]:.2f}" if valid_ch2[i] else "INVALID"
+                logging.debug(f"   {wavelengths[i]:.1f}nm: Ch1={ch1_val}dBm, Ch2={ch2_val}dBm")
+                
+        else:
+            logging.debug("Data retrieval failed")
+            return False
+        
+        logging.debug("\n LAMBDA SCAN TEST COMPLETED!")
+        return True
+    
     def configure_units(self):
         """Configure all channels to use consistent units."""
         # Set laser source to dBm
