@@ -5,7 +5,7 @@ import numpy as np
 import struct
 from typing import Tuple, Optional, List
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(funcName)s - %(levelname)s: %(message)s')
 pyvisa_logger = logging.getLogger('pyvisa')
 pyvisa_logger.setLevel(logging.WARNING)
 
@@ -35,8 +35,8 @@ class LambdaScanProtocol:
                 
                 self.instrument = self.rm.open_resource(
                     visa_address,
-                    baud_rate=9600,
-                    timeout=10000, # high to read lots of binary data
+                    baud_rate=115200,
+                    timeout=30000, # high to read lots of binary data
                     write_termination='\n',
                     read_termination=None
                 )
@@ -105,57 +105,65 @@ class LambdaScanProtocol:
             self.instrument.write(command)
             time.sleep(0.1)
             self.instrument.write('++read eoi')
-            
-            # Read the raw bytes
             raw_data = self.instrument.read_raw()
             return raw_data
-            
+        
         except Exception as e:
             logging.error(f"Binary query failed: {command}, Error: {e}")
             raise
-    
+
+    def _query_binary_and_parse(self, command):
+        if not self.instrument:
+            raise RuntimeError("Not connected")
+        self.instrument.write('++addr 20')
+        self.instrument.write(command)
+        time.sleep(0.5)
+        self.instrument.write('++read eoi')
+
+        # Read header first
+        header = self.instrument.read_bytes(2)  
+        if header[0:1] != b"#":
+            raise ValueError("Invalid SCPI block header")
+
+        num_digits = int(header[1:2].decode())
+        len_field = self.instrument.read_bytes(num_digits)
+        data_len = int(len_field.decode())
+
+        # Read binary data in chunks until complete
+        data_block = b""
+        remaining = data_len
+        while remaining > 0:
+            chunk = self.instrument.read_bytes(min(remaining, 4096))
+            data_block += chunk
+            remaining -= len(chunk)
+
+        # Flush leftovers (e.g., newline)
+        try:
+            self.instrument.read()  # Read trailing \n
+        except Exception:
+            pass
+
+        data = struct.unpack("<" + "f" * (len(data_block)//4), data_block)
+        data = np.array(data)
+
+        if data[0] > 0:
+            # W
+            data = 10*np.log10(data) + 30 
+        return data
+     
     def optical_sweep(self, start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s=0.02):
-        """Full sweep procedure"""
-        # Pass lambda scan params
-        self.configure_and_start_lambda_sweep(start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s)
-        
-        self.execute_lambda_scan()
-
-
-        # Retrieve data
-        wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data()
-        
-        if wavelengths is not None:
-            logging.debug("Data retrieved")
-            logging.debug(f"   Points: {len(wavelengths)}")
-            logging.debug(f"   Wavelengths: {wavelengths[0]:.1f} - {wavelengths[-1]:.1f} nm")
-            
-            # Check for valid data
-            valid_ch1 = ~np.isnan(power_ch1) & (np.abs(power_ch1) < 1e10)
-            valid_ch2 = ~np.isnan(power_ch2) & (np.abs(power_ch2) < 1e10)
-            
-            if np.any(valid_ch1):
-                logging.debug(f"   Ch1 range: {np.min(power_ch1[valid_ch1]):.2f} - {np.max(power_ch1[valid_ch1]):.2f} dBm")
-            else:
-                logging.debug("   Ch1: No valid data")
-                
-            if np.any(valid_ch2):
-                logging.debug(f"   Ch2 range: {np.min(power_ch2[valid_ch2]):.2f} - {np.max(power_ch2[valid_ch2]):.2f} dBm")
-            else:
-                logging.debug("   Ch2: No valid data")
-            
-            logging.debug("\nSample points:")
-            for i in range(0, len(wavelengths), max(1, len(wavelengths)//3)):
-                ch1_val = f"{power_ch1[i]:.2f}" if valid_ch1[i] else "INVALID"
-                ch2_val = f"{power_ch2[i]:.2f}" if valid_ch2[i] else "INVALID"
-                logging.debug(f"   {wavelengths[i]:.1f}nm: Ch1={ch1_val}dBm, Ch2={ch2_val}dBm")
-                
-        else:
-            logging.debug("Data retrieval failed")
+        """Call full optical sweep procedure"""
+        try:
+            # Pass params, execute scan, retrieve data, cleanup
+            self.configure_and_start_lambda_sweep(start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s)   
+            self.execute_lambda_scan()
+            wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data()
+            # self.cleanup_scan()
+            return wavelengths, power_ch1, power_ch2
+        except Exception as e:
+            logging.error(f"Found error in optical sweep: {e}")
             return None, None, None
         
-        return wavelengths, power_ch1, power_ch2
-    
     def configure_units(self):
         """Configure all channels to use consistent units."""
         # Set laser source to dBm
@@ -180,23 +188,24 @@ class LambdaScanProtocol:
         try:
             if not raw_data.startswith(b'#'):
                 raise ValueError("Not a valid binary block")
-            
+            logging.debug(f"raw dogging: {raw_data} \nis it the same?")
             # Get number of digits in length field
-            num_digits = int(chr(raw_data[1]))
+            num_digits = int(raw_data[1:2].decode())
             
-            # Get length of data block
-            length_str = raw_data[2:2+num_digits].decode('ascii')
-            data_length = int(length_str)
+            # Get length of data block, extract
+            data_len = int(raw_data[2:2+num_digits].decode())
+            binary_data = raw_data[2+num_digits:2+num_digits+data_len] # everything after header
             
-            # Extract the actual data
-            data_start = 2 + num_digits
-            binary_data = raw_data[data_start:data_start + data_length]
+            # Parse as 4-byte floats little endian
+            float_data = struct.unpack(
+                "<" + "f"*(len(binary_data)//4), binary_data 
+            )
+            float_data = np.array(float_data) 
             
-            # Parse as 4-byte floats (Intel byte order = little endian)
-            num_floats = data_length // 4
-            float_data = struct.unpack(f'<{num_floats}f', binary_data)
-            
-            return np.array(float_data)
+            if float_data[0] > 0:
+                # data is in watts
+                float_data = 10*np.log10(float_data) + 30 
+            return float_data
             
         except Exception as e:
             logging.error(f"Binary block parsing failed: {e}")
@@ -257,6 +266,7 @@ class LambdaScanProtocol:
         try: 
             # Monitor sweep progress
             sweep_complete = False
+            flag = True
             scan_start_time = time.time()
             timeout = 300  # 5 minute timeout
             
@@ -267,10 +277,11 @@ class LambdaScanProtocol:
                 # Check logging function status
                 func_status = self._query("SENS1:CHAN1:FUNC:STAT?").strip()
                 
-                logging.info(f"Sweep status: {sweep_status}, Function status: {func_status}")
-                
                 if "0" in sweep_status:  # Sweep stopped
-                    sweep_complete = True
+                    sweep_complete_in = True
+                    if sweep_complete_in and flag:
+                        flag = False
+                        timeout = 300
                 elif "COMPLETE" in func_status:
                     sweep_complete = True
                 
@@ -289,48 +300,25 @@ class LambdaScanProtocol:
             logging.error(f"System error: {error}")
             return False
     
-    def retrieve_scan_data_logged(self):
+    def retrieve_scan_data(self):
         """
-        Try to retrieve logged data using binary block parsing with error handling.
+        Retrieve logged data from a measurement, without stitching
         """
         try:
-            logging.info("Attempting to retrieve logged binary data...")
-            
-            # Check if logging function completed successfully
-            # func_status = self._query("SENS1:CHAN1:FUNC:STAT?")
-            # logging.info(f"Function status before data retrieval: {func_status}")
-            logging.debug("Stopping logging...")
-            self._write("SENS1:CHAN1:FUNC:STAT LOGG,STOP")
+            logging.info("[NEW] Attempting to retrieve logged binary data...")
             time.sleep(1) # give some time to stop the logging
+
             # Try to get the logged data
-            raw_data = self._query_binary("SENS1:CHAN1:FUNC:RES?")
-            rd2 = self._query_binary("SENS1:CHAN2:FUNC:RES?")
+            raw_data = self._query_binary_and_parse("SENS1:CHAN1:FUNC:RES?") # CORRECT DATAAAAAAAAAAAAAAAAAAAAA
+            time.sleep(0.4) 
+            rd2 = self._query_binary_and_parse("SENS1:CHAN2:FUNC:RES?")
             logging.debug(f"rawdata: {raw_data}\n s2: {rd2}")
-
-            # logging.debug("Stopping logging...")
-            # self._write("SENS1:CHAN1:FUNC:STAT LOGG,STOP")
-            # time.sleep(1) # give some time to stop the logging
-
-            get_pt = self._query(":SENSe1:CHANnel1:FUNCtion:PARameter:LOGGing?")
-            pts = get_pt.split("+")[1].replace(",","")
-            logging.debug(f"PTS: {pts}")
-
-            # Check if logging function completed successfully
-            func_status = self._query("SENS1:CHAN1:FUNC:STAT?")
-            logging.info(f"Function status before data retrieval: {func_status}")
-
-            get_block = self._query_binary(f"SENS1:CHAN1:FUNC:RES:BLOCk? 0,{pts}")
-            # get_block = self._query_binary("SENS1:CHAN1:FUNC:RES:MAXBlocksize?") # b'+204050\n' or 51,012 data points (floor(bytes/4))
-            logging.debug(f"\nblockdataraw : {get_block}")
-            time.sleep(0.5)
-
-            get_pt = self._query(":SENSe1:CHANnel1:FUNCtion:PARameter:LOGGing?")
-            pts = float(get_pt.split("+")[1].replace(",",""))
-            logging.debug(f"PTS: {pts}")
+            # time.sleep(0.4)
 
             # Parse the binary block
-            power_data = self.parse_binary_block(get_block)
-            
+            power_data = raw_data # self.parse_binary_block(raw_data)
+            pow_data = rd2  # self.parse_binary_block(rd2)
+
             if power_data is not None and len(power_data) > 0:
                 # Calculate corresponding wavelengths
                 wavelengths_nm = np.linspace(
@@ -338,11 +326,7 @@ class LambdaScanProtocol:
                     self.stop_wavelength * 1e9,
                     len(power_data)
                 )
-                
-                logging.info(f"Retrieved {len(power_data)} logged data points")
-                logging.info(f"Power data range: {np.min(power_data):.2f} to {np.max(power_data):.2f} dBm")
-                
-                return wavelengths_nm, power_data, None
+                return wavelengths_nm, power_data, pow_data
             else:
                 logging.error("No valid power data retrieved from logging")
                 return None, None, None
@@ -350,123 +334,7 @@ class LambdaScanProtocol:
         except Exception as e:
             logging.error(f"Logged data retrieval failed: {e}")
             return None, None, None
-    
-    def retrieve_scan_data_alternative(self):
-        """
-        Alternative data retrieval method - step through sweep manually.
-        This is more reliable for the initial test.
-        """
-        try:
-            logging.info("Retrieving scan data using manual sweep method...")
-            
-            # Calculate wavelength array
-            wavelengths_nm = np.linspace(
-                self.start_wavelength * 1e9,
-                self.stop_wavelength * 1e9,
-                self.num_points
-            )
-            
-            power_ch1 = []
-            power_ch2 = []
-            
-            # Set to start wavelength
-            self._write(f"SOUR0:WAV {self.start_wavelength}")
-            time.sleep(0.5)  # Allow settling
-            
-            # Step through each wavelength
-            for i, wavelength_nm in enumerate(wavelengths_nm):
-                wavelength_m = wavelength_nm * 1e-9
-                
-                # Set wavelength
-                self._write(f"SOUR0:WAV {wavelength_m}")
-                time.sleep(0.2)  # Allow settling
-                
-                # Update detector wavelengths to match
-                self._write(f"SENS1:CHAN1:POW:WAV {wavelength_m}")
-                self._write(f"SENS1:CHAN2:POW:WAV {wavelength_m}")
-                time.sleep(0.1)
-                
-                # Take measurements
-                try:
-                    p1 = float(self._query("READ1:CHAN1:POW?"))
-                    p2 = float(self._query("READ1:CHAN2:POW?"))
-                    
-                    power_ch1.append(p1)
-                    power_ch2.append(p2)
-                    
-                    if i % 2 == 0:  # Progress update every 2 points
-                        logging.info(f"Point {i+1}/{self.num_points}: {wavelength_nm:.1f}nm, Ch1: {p1:.2f}dBm, Ch2: {p2:.2f}dBm")
-                        
-                except Exception as e:
-                    logging.warning(f"Measurement failed at {wavelength_nm:.1f}nm: {e}")
-                    power_ch1.append(np.nan)
-                    power_ch2.append(np.nan)
-            
-            logging.info(f"Retrieved {len(power_ch1)} data points using manual method")
-            return wavelengths_nm, np.array(power_ch1), np.array(power_ch2)
-            
-        except Exception as e:
-            logging.error(f"Alternative data retrieval failed: {e}")
-            return None, None, None
-    
-    def retrieve_scan_data(self):
-        """
-        Retrieve measurement data with improved error handling.
-        """
-        logging.info("Retrieving scan data...")
         
-        # First try to get the logged data
-        wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data_logged()
-        
-        if wavelengths is not None:
-            logging.info("Successfully retrieved logged data from master channel")
-            
-            # Get slave channel data more carefully
-            try:
-                logging.info("Getting slave channel data...")
-                power_ch2 = []
-                
-                for i, wavelength_nm in enumerate(wavelengths):
-                    wavelength_m = wavelength_nm * 1e-9
-                    
-                    # Set laser wavelength
-                    self._write(f"SOUR0:WAV {wavelength_m}")
-                    
-                    # Set detector wavelength
-                    self._write(f"SENS1:CHAN2:POW:WAV {wavelength_m}")
-                    time.sleep(0.1)
-                    
-                    try:
-                        # Use READ instead of FETCH to ensure fresh measurement
-                        p2_str = self._query("READ1:CHAN2:POW?")
-                        p2 = float(p2_str)
-                        
-                        # Check for error values
-                        if abs(p2) > 1e10:  # Likely an error value
-                            logging.warning(f"Error value detected at {wavelength_nm:.1f}nm: {p2}")
-                            p2 = np.nan
-                            
-                        power_ch2.append(p2)
-                        
-                        if i % 3 == 0:  # Progress every 3 points
-                            logging.info(f"Ch2 point {i+1}/{len(wavelengths)}: {wavelength_nm:.1f}nm = {p2:.2f}dBm")
-                            
-                    except Exception as e:
-                        logging.warning(f"Failed to read Ch2 at {wavelength_nm:.1f}nm: {e}")
-                        power_ch2.append(np.nan)
-                
-                power_ch2 = np.array(power_ch2)
-                logging.info(f"Slave channel data range: {np.nanmin(power_ch2):.2f} to {np.nanmax(power_ch2):.2f} dBm")
-                
-            except Exception as e:
-                logging.error(f"Failed to get slave channel data: {e}")
-                power_ch2 = np.full_like(power_ch1, np.nan)
-                
-            return wavelengths, power_ch1, power_ch2
-        else:
-            logging.info("Logged data failed, using manual sweep method")
-            return None, None, None
-    
     def cleanup_scan(self):
         """Clean up after scan - stop functions and turn off laser."""
         try:
@@ -498,3 +366,113 @@ class LambdaScanProtocol:
         except Exception as e:
             logging.error(f"Error during disconnect: {e}")
 
+############# ZOMBIES##################
+    #  def optical_sweep2(self, start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s=0.02):
+    #     """Full sweep procedure"""
+    #     # Pass lambda scan params
+    #     self.configure_and_start_lambda_sweep(start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s)
+        
+    #     self.execute_lambda_scan()
+
+    #     # Retrieve data
+    #     # wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data()
+    #     wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data_logged()
+        
+    #     # if wavelengths is not None:
+    #     #     logging.debug("Data retrieved")
+    #     #     logging.debug(f"   Points: {len(wavelengths)}")
+    #     #     logging.debug(f"   Wavelengths: {wavelengths[0]:.1f} - {wavelengths[-1]:.1f} nm")
+            
+    #     #     # Check for valid data
+    #     #     valid_ch1 = ~np.isnan(power_ch1) & (np.abs(power_ch1) < 1e10)
+    #     #     valid_ch2 = ~np.isnan(power_ch2) & (np.abs(power_ch2) < 1e10)
+            
+    #     #     if np.any(valid_ch1):
+    #     #         logging.debug(f"   Ch1 range: {np.min(power_ch1[valid_ch1]):.2f} - {np.max(power_ch1[valid_ch1]):.2f} dBm")
+    #     #     else:
+    #     #         logging.debug("   Ch1: No valid data")
+                
+    #     #     if np.any(valid_ch2):
+    #     #         logging.debug(f"   Ch2 range: {np.min(power_ch2[valid_ch2]):.2f} - {np.max(power_ch2[valid_ch2]):.2f} dBm")
+    #     #     else:
+    #     #         logging.debug("   Ch2: No valid data")
+            
+    #     #     logging.debug("\nSample points:")
+    #     #     for i in range(0, len(wavelengths), max(1, len(wavelengths)//3)):
+    #     #         ch1_val = f"{power_ch1[i]:.2f}" if valid_ch1[i] else "INVALID"
+    #     #         ch2_val = f"{power_ch2[i]:.2f}" if valid_ch2[i] else "INVALID"
+    #     #         logging.debug(f"   {wavelengths[i]:.1f}nm: Ch1={ch1_val}dBm, Ch2={ch2_val}dBm")
+                
+    #     # else:
+    #     #     logging.debug("Data retrieval failed")
+    #     #     return None, None, None
+        
+    #     return wavelengths, power_ch1, power_ch2
+
+    # def retrieve_scan_data_logged(self):
+    #     """
+    #     Try to retrieve logged data using binary block parsing with error handling.
+    #     """
+    #     try:
+    #         logging.info("Attempting to retrieve logged binary data...")
+            
+    #         # Check if logging function completed successfully
+    #         func_status = self._query("SENS1:CHAN1:FUNC:STAT?")
+    #         logging.info(f"Function status before data retrieval: {func_status}")
+    #         # logging.debug("Stopping logging...")
+    #         # self._write("SENS1:CHAN1:FUNC:STAT LOGG,STOP")
+    #         time.sleep(1) # give some time to stop the logging
+    #         # Try to get the logged data
+    #         raw_data = self._query_binary("SENS1:CHAN1:FUNC:RES?") # CORRECT DATAAAAAAAAAAAAAAAAAAAAA
+    #         time.sleep(0.4) 
+    #         rd2 = self._query_binary("SENS1:CHAN2:FUNC:RES?")
+    #         logging.debug(f"rawdata: {raw_data}\n s2: {rd2}")
+    #         time.sleep(0.4)
+
+    #         # logging.debug("Stopping logging...")
+    #         # self._write("SENS1:CHAN1:FUNC:STAT LOGG,STOP")
+    #         # time.sleep(1) # give some time to stop the logging
+
+    #         get_pt = self._query("SENSe1:CHANnel1:FUNCtion:PARameter:LOGGing?")
+    #         pts = get_pt.split("+")[1].replace(",","")
+    #         # logging.debug(f"PTS: {pts}")
+
+    #         # Check if logging function completed successfully
+    #         # func_status = self._query("SENS1:CHAN1:FUNC:STAT?")
+    #         # logging.info(f"Function status before data retrieval: {func_status}")
+
+    #         # get_block_ch1 = self._query_binary(f"SENS1:CHAN1:FUNC:RES:BLOCk? 0,{pts}")
+            
+    #         # get_block = self._query_binary("SENS1:CHAN1:FUNC:RES:MAXBlocksize?") # b'+204050\n' or 51,012 data points (floor(bytes/4))
+    #         # logging.debug(f"\nblockdataraw : {get_block}")
+    #         time.sleep(0.5)
+    #         # get_block_ch2 =  self._query_binary(f"SENS1:CHAN2:FUNC:RES:BLOCk? 0,{pts}")
+    #         # get_pt = self._query(":SENSe1:CHANnel1:FUNCtion:PARameter:LOGGing?")
+    #         # pts = float(get_pt.split("+")[1].replace(",",""))
+    #         # logging.debug(f"PTS: {pts}")
+
+    #         # Parse the binary block
+    #         power_data = self.parse_binary_block(raw_data)
+    #         pow_data = self.parse_binary_block(rd2)
+
+    #         logging.debug(f"pow1: {power_data}\n pow2: {pow_data}\n")
+            
+    #         if power_data is not None and len(power_data) > 0:
+    #             # Calculate corresponding wavelengths
+    #             wavelengths_nm = np.linspace(
+    #                 self.start_wavelength * 1e9,
+    #                 self.stop_wavelength * 1e9,
+    #                 len(power_data)
+    #             )
+                
+    #             logging.info(f"Retrieved {len(power_data)} logged data points")
+    #             logging.info(f"Power data range: {np.min(power_data):.2f} to {np.max(power_data):.2f} dBm")
+                
+    #             return wavelengths_nm, power_data, pow_data
+    #         else:
+    #             logging.error("No valid power data retrieved from logging")
+    #             return None, None, None
+                
+    #     except Exception as e:
+    #         logging.error(f"Logged data retrieval failed: {e}")
+    #         return None, None, None
