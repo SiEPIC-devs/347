@@ -8,8 +8,8 @@ Cameron Basara, 2025
 
 @dataclass
 class FineAlignConfiguration:
-    step_size = 1  # microns
-    scan_window = 30 # microns
+    step_size = 0.1  # microns
+    scan_window = 10 # microns
     threshold = -10.0 # not used
     max_gradient_iters = 10 # 
     use_crosshair = False 
