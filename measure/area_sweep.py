@@ -59,7 +59,8 @@ class AreaSweep:
             # Initial measurement
             loss_master, loss_slave = self.nir_manager.read_power() 
             data.append([x_pos, y_pos, (loss_master, loss_slave)])
-
+            x_data = []
+            
             parity = lambda step, n: step if (n%2) != 0 else -step  # helper for parity switchin
 
             for i in range(x_len // x_step):
@@ -71,10 +72,12 @@ class AreaSweep:
                         relative = True,
                         wait_for_completion = True)
                     
-                    loss_master, loss_slave = self.nir_manager.read_power() # some params
+                    loss_master, loss_slave = self.nir_manager.read_power() 
+                    x_data.append(max(loss_master, loss_slave))
                     x_pos += step
-                    data.append([x_pos, y_pos, (loss_master, loss_slave)])
-
+                    # data.append([x_pos, y_pos, (loss_master, loss_slave)])
+                data.append(x_data)
+                x_data = []
                 
                 # After a row has been measured, move y axis take the initial measurement
                 await self.stage_manager.move_axis(
@@ -83,10 +86,11 @@ class AreaSweep:
                         relative = True,
                         wait_for_completion = True)
                 loss_master, loss_slave = self.nir_manager.read_power() # some params
+                x_data.append(max(loss_master,loss_slave))
                 y_pos += y_step
-                data.append([x_pos, y_pos, (loss_master, loss_slave)])
+                # data.append([x_pos, y_pos, (loss_master, loss_slave)]) # np.array[[x,y (ch1.1, ch1.2)],[]...,[]]
 
-        
+            
             # Once area sweep is complete, return the data as np.array
             return np.array(data)
 
