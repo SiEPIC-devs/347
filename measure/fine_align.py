@@ -4,8 +4,7 @@ from typing import Dict, Any, Tuple
 
 from motors.stage_manager import StageManager
 from motors.hal.motors_hal import AxisType
-# from NIR.nir_manager import NirManager
-from NIR.nir_controller_practical import *
+from NIR.nir_manager import NirManager
 
 import logging
 
@@ -23,10 +22,10 @@ class FineAlign:
     Perform fine alignment by optimizing optical coupling using spiral, gradient, and optional crosshair search.
     """
 
-    def __init__(self, config: Dict[str, Any], stage_manager: StageManager, nir_controller: Agilent8163Controller):
+    def __init__(self, config: Dict[str, Any], stage_manager: StageManager, nir_manager: NirManager):
         self.config = config
         self.stage_manager = stage_manager
-        self.nir_manager = nir_controller
+        self.nir_manager = nir_manager
 
         # Extract config params 
         self.step_size = config.get("step_size", 2.0)  # microns

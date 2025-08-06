@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 from motors.stage_manager import *
 from motors.hal.motors_hal import AxisType, Position
-from NIR.nir_controller_practical import *
+from NIR.nir_manager import *
 
 import logging
 
@@ -23,9 +23,9 @@ class AreaSweep:
     Take an optical area sweep for alignement purposes
     """
     def __init__(self, area_sweep_config: Dict[Any, Any], # place holder
-                 stage_manager: StageManager, nir_controller: Agilent8163Controller):
+                 stage_manager: StageManager, nir_manager: NIRManager):
         self.stage_manager = stage_manager
-        self.nir_manager = Agilent8163Controller
+        self.nir_manager = nir_manager
         self.config = area_sweep_config
 
     async def begin_sweep(self) -> np.ndarray:
@@ -49,6 +49,7 @@ class AreaSweep:
 
             # Initiate data
             data = []
+            x_data = []
             x_pos = await self.stage_manager.get_position(AxisType.X)
             x_pos = x_pos.actual
             y_pos = await self.stage_manager.get_position(AxisType.Y)
@@ -58,8 +59,8 @@ class AreaSweep:
 
             # Initial measurement
             loss_master, loss_slave = self.nir_manager.read_power() 
-            data.append([x_pos, y_pos, (loss_master, loss_slave)])
-            x_data = []
+            x_data.append(max(loss_master, loss_slave))
+            
             
             parity = lambda step, n: step if (n%2) != 0 else -step  # helper for parity switchin
 
@@ -75,7 +76,6 @@ class AreaSweep:
                     loss_master, loss_slave = self.nir_manager.read_power() 
                     x_data.append(max(loss_master, loss_slave))
                     x_pos += step
-                    # data.append([x_pos, y_pos, (loss_master, loss_slave)])
                 data.append(x_data)
                 x_data = []
                 
@@ -88,8 +88,6 @@ class AreaSweep:
                 loss_master, loss_slave = self.nir_manager.read_power() # some params
                 x_data.append(max(loss_master,loss_slave))
                 y_pos += y_step
-                # data.append([x_pos, y_pos, (loss_master, loss_slave)]) # np.array[[x,y (ch1.1, ch1.2)],[]...,[]]
-
             
             # Once area sweep is complete, return the data as np.array
             return np.array(data)
