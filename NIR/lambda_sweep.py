@@ -10,18 +10,22 @@ pyvisa_logger = logging.getLogger('pyvisa')
 pyvisa_logger.setLevel(logging.WARNING)
 
 class LambdaScanProtocol:
-    def __init__(self, laser=None, com_port=5):
+    def __init__(self, config = None, laser=None, com_port=5):
         self.laser = laser
         self.com_port = com_port
         self.rm = None
         self.instrument = None
+
+        # If laser is provided and already connected, use its instrument
+        if self.laser and hasattr(self.laser, 'instrument') and self.laser.instrument:
+            self.instrument = self.laser.instrument
         
         # Lambda scan parameters
-        self.start_wavelength = None
-        self.stop_wavelength = None
-        self.step_size = None
+        self.start_wavelength = None if not config else config.start_nm 
+        self.stop_wavelength = None if not config else config.stop_nm
+        self.step_size = None if not config else config.step_nm
         self.num_points = None
-        self.laser_power = None
+        self.laser_power = None if not config else config.laser_power_dbm
         self.averaging_time = None
         
     def connect(self):
@@ -137,7 +141,7 @@ class LambdaScanProtocol:
             data_block += chunk
             remaining -= len(chunk)
 
-        # Flush leftovers (e.g., newline)
+        # Flush leftovers 
         try:
             self.instrument.read()  # Read trailing \n
         except Exception:
@@ -150,7 +154,10 @@ class LambdaScanProtocol:
             # W
             data = 10*np.log10(data) + 30 
         return data
-     
+    
+    def sweep(self):
+        return self.optical_sweep(self.start_wavelength, self.stop_wavelength, self.step_size, self.laser_power)
+    
     def optical_sweep(self, start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s=0.02):
         """Call full optical sweep procedure"""
         try:
@@ -159,6 +166,8 @@ class LambdaScanProtocol:
             self.execute_lambda_scan()
             wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data()
             # self.cleanup_scan()
+            power_ch1 = np.where(power_ch1 > 0, np.nan, power_ch1)
+            power_ch2 = np.where(power_ch2 > 0, np.nan, power_ch2)
             return wavelengths, power_ch1, power_ch2
         except Exception as e:
             logging.error(f"Found error in optical sweep: {e}")
