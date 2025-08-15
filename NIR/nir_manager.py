@@ -2,7 +2,7 @@ import logging
 from typing import Dict, Any, Callable, List, Optional
 from dataclasses import dataclass, asdict
 
-from NIR.nir_controller import Agilent8163Controller
+from NIR.nir_controller import Agilent8164Controller
 from NIR.lambda_sweep import LambdaScanProtocol
 from NIR.hal.nir_hal import LaserEvent, LaserEventType
 from NIR.config.nir_config import NIRConfiguration  
@@ -21,7 +21,7 @@ class NIRManager:
         self._event_callbacks: List[Callable[[LaserEvent], None]] = []
         
         # Initialize controller
-        self.controller = Agilent8163Controller(
+        self.controller = Agilent8164Controller(
             com_port=config.com_port,
             laser_slot=config.laser_slot,
             detector_slots=config.detector_slots,
