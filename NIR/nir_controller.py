@@ -758,4 +758,4 @@ class Agilent8164Controller(LaserHAL):
             return -40.0, 10.0
 
 # Register driver
-register_driver("347_NIR", Agilent8163Controller)
+register_driver("347_NIR", Agilent8164Controller)
