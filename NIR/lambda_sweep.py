@@ -161,11 +161,37 @@ class LambdaScanProtocol:
     def optical_sweep(self, start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s=0.02):
         """Call full optical sweep procedure"""
         try:
-            # Pass params, execute scan, retrieve data, cleanup
-            self.configure_and_start_lambda_sweep(start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s)   
-            self.execute_lambda_scan()
-            wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data()
-            # self.cleanup_scan()
+            # points calc
+            points_f = (float(stop_nm) - float(start_nm)) / float(step_nm)
+            points = int(points_f + 1.0000001)  # guard for fp rounding
+
+            # segmentation width
+            if points > 20001:
+                self.stitching = True
+
+            if self.stitching:
+                segments = int(np.ceil(points / 20001.0))
+                seg_span = int(np.ceil((stop_nm - start_nm) / segments))  # in nm, positive
+                bottom = int(start_nm)
+                flag = False
+                while bottom <= stop_nm:
+                    top = min(bottom + seg_span, stop_nm)
+                    self.configure_and_start_lambda_sweep(bottom, top, step_nm, laser_power_dbm, averaging_time_s)
+                    self.execute_lambda_scan()
+                    wls, ch1, ch2 = self.retrieve_scan_data()
+                    if not flag:
+                        wavelengths = wls; power_ch1 = ch1; power_ch2 = ch2; flag = True
+                    else:
+                        power_ch1 = np.concatenate([power_ch1, ch1])
+                        power_ch2 = np.concatenate([power_ch2, ch2])
+                        wavelengths = np.concatenate([wavelengths, wls])
+                    bottom = top + step_nm
+            else:
+                self.configure_and_start_lambda_sweep(start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s)
+                self.execute_lambda_scan()
+                wavelengths, power_ch1, power_ch2 = self.retrieve_scan_data()
+
+            # sanitize
             power_ch1 = np.where(power_ch1 > 0, np.nan, power_ch1)
             power_ch2 = np.where(power_ch2 > 0, np.nan, power_ch2)
             return wavelengths, power_ch1, power_ch2
