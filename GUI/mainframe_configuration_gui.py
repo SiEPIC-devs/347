@@ -8,13 +8,9 @@
 from lab_gui import *
 from remi.gui import *
 from remi import start, App
-import threading
-import webview
-import signal
-import time
-import socket
-
-
+import threading, webview, signal, socket, time
+w = 6
+h = 17
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -108,8 +104,9 @@ if __name__ == '__main__':
     webview.create_window(
         'Probe Stage',
         f'http://{local_ip}',
-        width=672,
-        height=771,
+        width=672-w,
+        height=771-h,
+        x= 100, y= 100,
         resizable=True
     )
 

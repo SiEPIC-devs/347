@@ -1,17 +1,12 @@
-import shutil
-
-from remi.gui import *
 from lab_gui import *
 from remi import start, App
-import lab_coordinates
-import threading
-import math
-import json
-import os
-import time
+import lab_coordinates, threading, math, json, os, time, webview, wx, shutil
 from lab_tsp import TSPSolver
-import wx
-import webview
+w = 6
+h = 16
+command_path = os.path.join("database", "command.json")
+shared_path = os.path.join("database", "shared_memory.json")
+desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
 
 
 def fmt(val):
@@ -26,11 +21,34 @@ class testing(App):
 
     def __init__(self, *args, **kwargs):
         # ------------------------------------------------------------------ LOAD DATA
-        self.init = False
-        self.load_file()
-        self.init = True
-        # runtime flags
-        self.running = False  # becomes True while measurement loop is active
+        self._user_mtime = None
+        self._first_command_check = True
+        self._user_stime = None
+        self.notopen = True
+        self.running = False
+        self.cur_user = ""
+        self.image_path = ""
+        self.serial_list = set()
+        self.device_num = 0
+        self.auto_sweep = 0
+
+        self.gds = None
+        self.number = None
+        self.coordinate = None
+        self.polarization = None
+        self.wavelength = None
+        self.type = None
+        self.devicename = None
+        self.status = None
+        self.filtered_idx = []
+        self.page_size = 50
+        self.page_index = 0
+
+        self._last_user = ""
+        self._last_user_paths = []
+        self.pre_num = 1
+
+        self.new_command = {}
 
         if "editing_mode" not in kwargs:
             super(testing, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
@@ -38,31 +56,73 @@ class testing(App):
     # ------------------------------------------------------------------ REMI HOOKS
     def idle(self):
         self.terminal.terminal_refresh()
-
-        json_path = os.path.join(os.getcwd(), "database", "current_user.json")
         try:
-            mtime = os.path.getmtime(json_path)
+            mtime = os.path.getmtime(command_path)
+            stime = os.path.getmtime(shared_path)
         except FileNotFoundError:
             mtime = None
+            stime = None
 
-        if mtime != getattr(self, "_user_mtime", None):
+        if self._first_command_check:
             self._user_mtime = mtime
-            cur_user = ""
-            if mtime is not None:
+            self._first_command_check = False
+            return
+
+        if mtime != self._user_mtime:
+            self._user_mtime = mtime
+            self.run_in_thread(self.execute_command)
+
+        if stime != self._user_stime:
+            self._user_stime = stime
+            self.cur_user = ""
+            if stime is not None:
                 try:
-                    with open(json_path, "r", encoding="utf-8") as f:
-                        cur_user = json.load(f).get("user", "").strip()
+                    with open(shared_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        self.cur_user = data.get("User", "").strip()
+                        self.image_path = data.get("Image", "")
+                        self.display_plot.set_image(f"my_res:{self.image_path}")
+                        self.serial_list = set(data.get("Selection", []))
+                        self.device_num = data.get("DeviceNum", 0)
+                        self.auto_sweep = data.get("AutoSweep", 0)
+
                 except Exception as e:
                     print(f"[Warn] read json failed: {e}")
 
-            new_path = os.path.join(os.getcwd(), "UserData", cur_user) if cur_user else ""
-            if new_path and new_path != self.save_path_input.get_text():
-                self.save_path_input.set_text(new_path)
+            if self.auto_sweep == 1 and self.device_num != self.pre_num:
+                self.status[self.device_num - 1] = "1"
+                self.build_table_rows()
+                self.pre_num = self.device_num
+
+            self.update_path_dropdown()
 
     def main(self):
         return testing.construct_ui(self)
 
     # ------------------------------------------------------------------ UI BUILDERS
+    def update_path_dropdown(self):
+        """Update save format dropdown if user or contents change."""
+        if not self.cur_user:
+            return
+
+        user_dir = os.path.join("UserData", self.cur_user)
+        if not os.path.isdir(user_dir):
+            return
+
+        entries = [
+            name for name in os.listdir(user_dir)
+            if os.path.isdir(os.path.join(user_dir, name)) or name.endswith((".json", ".txt", ".csv"))
+        ]
+        entries_sorted = sorted(entries)
+
+        if self.cur_user != self._last_user or entries_sorted != self._last_user_paths:
+            self.path_dd.empty()
+            self.path_dd.append("All")
+            for name in entries_sorted:
+                self.path_dd.append(name)
+            self._last_user = self.cur_user
+            self._last_user_paths = entries_sorted
+
     def total_pages(self):
         return max(1, math.ceil(len(self.filtered_idx) / self.page_size))
 
@@ -123,51 +183,6 @@ class testing(App):
     def run_in_thread(self, target, *args):
         threading.Thread(target=target, args=args, daemon=True).start()
 
-    # ------------------------------------------------------------------ TIME FORMATTING
-    @staticmethod
-    def _sec2hms(seconds: float) -> str:
-        seconds = max(0, int(seconds))
-        h = seconds // 3600
-        m = (seconds % 3600) // 60
-        s = seconds % 60
-        return f"{h:02d}:{m:02d}:{s:02d}"
-
-    def _update_time_labels(self, elapsed_s: float, remaining_s: float):
-        self.elapsed_time.set_text(self._sec2hms(elapsed_s))
-        self.remaining_time.set_text(self._sec2hms(remaining_s))
-
-    # ------------------------------------------------------------------ MEASUREMENT SEQUENCE
-    def _measure_sequence(self):
-        """Iterate over filtered devices, 5 s each, updating status and timers."""
-        total = len(self.filtered_idx)
-        if total == 0:
-            return
-
-        start_ts = time.time()
-        for local_idx, global_idx in enumerate(self.filtered_idx):
-            if not self.running:
-                break  # stopped by user
-
-            # wait 5 seconds in 1-second steps so labels refresh smoothly
-            for _ in range(5):
-                if not self.running:
-                    break
-                elapsed = time.time() - start_ts
-                remaining = max(0, total * 5 - elapsed)
-                self._update_time_labels(elapsed, remaining)
-                time.sleep(1)
-
-            if not self.running:
-                break
-
-            # mark device as done and refresh table
-            self.status[global_idx] = "1"
-            self.build_table_rows()
-
-        # sequence ended (completed or stopped)
-        self.running = False
-        self._update_time_labels(0, 0)
-
     # ------------------------------------------------------------------ NAVIGATION
     def goto_prev_page(self):
         if self.page_index > 0:
@@ -194,74 +209,155 @@ class testing(App):
 
     # ------------------------------------------------------------------ UI LAYOUT
     def construct_ui(self):
-        testing_container = StyledContainer(container=None, variable_name="testing_container", left=0, top=0)
+        testing_container = StyledContainer(
+            container=None, variable_name="testing_container", left=0, top=0
+        )
 
         # -------------------------------------------------- IMAGE BLOCK
-        self.image_container = StyledContainer(container=testing_container, variable_name="image_container",
-                                          left=0, top=0, height=370, width=385, bg_color=True, color="#DCDCDC")
-        path_container = StyledContainer(container=testing_container, variable_name="path_container",
-                                         left=10, top=370, height=110, width=370)
-        StyledLabel(container=path_container, text="Save path", variable_name="save_path", left=5, top=20,
-                    width=80, height=50, font_size=100, color="#222", align="left")
-        StyledLabel(container=path_container, text="Save format", variable_name="save_format", left=5, top=60,
-                    width=80, height=50, font_size=100, color="#222", align="left")
-        self.save_path_input = StyledTextInput(container=path_container, variable_name="save_path_input", left=90, top=15,
-                        width=162, height=28, position="absolute", text="")
-        StyledDropDown(container=path_container, text=["Comma separated (.csv)", "Other"], variable_name="save_format_dd",
-                       left=90, top=55, width=180, height=30)
-        self.save_btn = StyledButton(container=path_container, text="Save", variable_name="Save",
-                     left=275, top=15, width=90, height=30, normal_color="#007BFF", press_color="#0056B3")
-        self.open_btn = StyledButton(container=path_container, text="Open Path", variable_name="open_path",
-                     left=275, top=55, width=90, height=30, normal_color="#007BFF", press_color="#0056B3")
-        self.display_plot = StyledImageBox(container=self.image_container, variable_name="display_plot", left=5, top=5,
-                                           width=375, height=360, image_path="my_res:none.png")
+        self.image_container = StyledContainer(
+            container=testing_container, variable_name="image_container",
+            left=0, top=0, height=370, width=385, bg_color=True, color="#DCDCDC"
+        )
+
+        path_container = StyledContainer(
+            container=testing_container, variable_name="path_container",
+            left=10, top=370, height=110, width=370
+        )
+
+        StyledLabel(
+            container=path_container, text="Save path", variable_name="save_path",
+            left=5, top=20, width=80, height=50, font_size=100, color="#222", align="left"
+        )
+
+        StyledLabel(
+            container=path_container, text="Save file", variable_name="save_file",
+            left=5, top=60, width=80, height=50, font_size=100, color="#222", align="left"
+        )
+
+        self.save_path_input = StyledTextInput(
+            container=path_container, variable_name="save_path_input",
+            left=90, top=15, width=162, height=28, position="absolute", text=desktop_path
+        )
+
+        self.path_dd = StyledDropDown(
+            container=path_container, text=["All", "HeatMap", "Spectrum"], variable_name="save_file_dd",
+            left=90, top=55, width=180, height=30
+        )
+
+        self.save_btn = StyledButton(
+            container=path_container, text="Save", variable_name="Save",
+            left=275, top=15, width=90, height=30, normal_color="#007BFF", press_color="#0056B3"
+        )
+
+        self.open_btn = StyledButton(
+            container=path_container, text="Open Path", variable_name="open_path",
+            left=275, top=55, width=90, height=30, normal_color="#007BFF", press_color="#0056B3"
+        )
+
+        self.display_plot = StyledImageBox(
+            container=self.image_container, variable_name="display_plot",
+            left=5, top=5, width=375, height=360, image_path="my_res:TSP/none.png"
+        )
 
         # -------------------------------------------------- SETTING BLOCK
-        setting_container = StyledContainer(container=testing_container, variable_name="setting_container",
-                                            left=400, top=10, height=475, width=240)
-        StyledDropDown(container=setting_container, text=["Laser Sweep", "...."],
-                       variable_name="laser_sweep", left=0, top=0, width=120, height=30)
-        self.setting_btn = StyledButton(container=setting_container, text="Setting", variable_name="setting",
-                                        left=131, top=2.5, width=50, height=25, normal_color="#007BFF", press_color="#0056B3")
-        self.load_btn = StyledButton(container=setting_container, text="Load", variable_name="load",
-                                     left=191, top=2.5, width=50, height=25, normal_color="#007BFF", press_color="#0056B3")
+        setting_container = StyledContainer(
+            container=testing_container, variable_name="setting_container", left=400, top=10, height=475, width=240
+        )
+
+        StyledDropDown(
+            container=setting_container, text=["Laser Sweep", "...."], variable_name="laser_sweep",
+            left=0, top=0, width=120, height=30
+        )
+
+        self.setting_btn = StyledButton(
+            container=setting_container, text="Setting", variable_name="setting",
+            left=131, top=2.5, width=50, height=25, normal_color="#007BFF", press_color="#0056B3"
+        )
+
+        self.load_btn = StyledButton(
+            container=setting_container, text="Load", variable_name="load",
+            left=191, top=2.5, width=50, height=25, normal_color="#007BFF", press_color="#0056B3"
+        )
 
         headers = ["Device", "Status"]
         self.col_widths = [100, 40]
-        table_container = StyledContainer(container=setting_container, variable_name="setting_container",
-                                          left=0, top=40, height=260, width=235, border=True, overflow=True)
-        self.table = StyledTable(container=table_container, variable_name="device_status",
-                                 left=0, top=0, height=25, table_width=235, headers=headers, widths=self.col_widths, row=1)
+        table_container = StyledContainer(
+            container=setting_container, variable_name="setting_container",
+            left=0, top=40, height=230, width=235, border=True, overflow=True
+        )
+
+        self.table = StyledTable(
+            container=table_container, variable_name="device_status",
+            left=0, top=0, height=25, table_width=235, headers=headers, widths=self.col_widths, row=1
+        )
 
         # ------ control buttons
-        self.start_btn = StyledButton(container=setting_container, text="Start", variable_name="start",
-                                      left=0, top=375, width=70, height=30, normal_color="#007BFF", press_color="#0056B3")
-        self.stop_btn = StyledButton(container=setting_container, text="Stop", variable_name="stop",
-                                     left=0, top=415, width=70, height=30, normal_color="#007BFF", press_color="#0056B3")
+        self.start_btn = StyledButton(
+            container=setting_container, text="Start", variable_name="start",
+            left=0, top=375, width=70, height=30, normal_color="#007BFF", press_color="#0056B3"
+        )
 
-        StyledLabel(container=setting_container, text="Elapsed", variable_name="elapsed", left=80, top=382,
-                    width=65, height=30, font_size=100, color="#222", align="right")
-        StyledLabel(container=setting_container, text="Remaining", variable_name="remaining", left=80, top=422,
-                    width=65, height=30, font_size=100, color="#222", align="right")
-        self.elapsed_time = StyledLabel(container=setting_container, text="00:00:00", variable_name="elapsed_time",
-                                         left=165, top=375, width=75, height=25, font_size=100, color="#222", border=True, flex=True)
-        self.remaining_time = StyledLabel(container=setting_container, text="00:00:00", variable_name="remaining_time",
-                                           left=165, top=415, width=75, height=25, font_size=100, color="#222", border=True, flex=True)
+        self.stop_btn = StyledButton(
+            container=setting_container, text="Stop", variable_name="stop",
+            left=0, top=415, width=70, height=30, normal_color="#007BFF", press_color="#0056B3"
+        )
+
+        StyledLabel(
+            container=setting_container, text="Elapsed", variable_name="elapsed",
+            left=80, top=382, width=65, height=30, font_size=100, color="#222", align="right"
+        )
+
+        StyledLabel(
+            container=setting_container, text="Remaining", variable_name="remaining",
+            left=80, top=422, width=65, height=30, font_size=100, color="#222", align="right"
+        )
+
+        self.elapsed_time = StyledLabel(
+            container=setting_container, text="00:00:00", variable_name="elapsed_time",
+            left=165, top=375, width=75, height=25, font_size=100, color="#222", border=True, flex=True
+        )
+
+        self.remaining_time = StyledLabel(
+            container=setting_container, text="00:00:00", variable_name="remaining_time",
+            left=165, top=415, width=75, height=25, font_size=100, color="#222", border=True, flex=True
+        )
 
         # ---- pagination controls
-        self.prev_btn = StyledButton(container=setting_container, text="◀", variable_name="prev_page",
-                                     left=0, top=315, width=30, height=25)
-        self.page_input = StyledTextInput(container=setting_container, variable_name="page_input",
-                                          left=35, top=315, width=25, height=25)
-        self.total_page_label = StyledLabel(container=setting_container, text=f"/ {self.total_pages()}",
-                                            variable_name="page_total", left=80, top=315, width=40, height=25,
-                                            flex=True, justify_content="left")
-        self.jump_btn = StyledButton(container=setting_container, text="Go", variable_name="jump_page",
-                                     left=110, top=315, width=40, height=25)
-        self.next_btn = StyledButton(container=setting_container, text="▶", variable_name="next_page",
-                                     left=155, top=315, width=30, height=25)
-        self.tsp_btn = StyledButton(container=setting_container, text="Solve", variable_name="solve_tsp",
-                                     left=190, top=315, width=50, height=25)
+        self.prev_btn = StyledButton(
+            container=setting_container, text="◀", variable_name="prev_page",
+            left=20, top=285, width=35, height=25
+        )
+
+        self.page_input = StyledTextInput(
+            container=setting_container, variable_name="page_input", left=63, top=285, width=25, height=25
+        )
+
+        self.total_page_label = StyledLabel(
+            container=setting_container, text=f"/ {self.total_pages()}", variable_name="page_total",
+            left=108, top=285, width=40, height=25, flex=True, justify_content="left"
+        )
+
+        self.jump_btn = StyledButton(
+            container=setting_container, text="Go", variable_name="jump_page", left=138, top=285, width=40, height=25
+        )
+
+        self.next_btn = StyledButton(
+            container=setting_container, text="▶", variable_name="next_page", left=186, top=285, width=35, height=25
+        )
+
+        self.tsp_btn = StyledButton(
+            container=setting_container, text="Solve", variable_name="solve_tsp", left=0, top=335, width=70, height=30
+        )
+
+        self.solve_time = StyledSpinBox(
+            container=setting_container, variable_name="solve_time_spin",
+            left=85, top=337, width=50, height=25, min_value=1, max_value=600, step=1, value=60
+        )
+
+        StyledLabel(
+            container=setting_container, text="s", variable_name="second_label",
+            left=160, top=335, width=20, height=30, flex=True, justify_content="left"
+        )
 
         # ---- event bindings
         self.prev_btn.do_onclick(lambda *_: self.run_in_thread(self.goto_prev_page))
@@ -276,70 +372,78 @@ class testing(App):
         self.setting_btn.do_onclick(lambda *_: self.run_in_thread(self.laser_sweep_setting))
 
         # -------------------------------------------------- TERMINAL BLOCK
-        terminal_container = StyledContainer(container=testing_container, variable_name="terminal_container",
-                                             left=0, top=500, height=150, width=650, bg_color=True)
-        self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
-                                 left=10, top=15, width=610, height=100)
+        terminal_container = StyledContainer(
+            container=testing_container, variable_name="terminal_container",
+            left=0, top=500, height=150, width=650, bg_color=True
+        )
 
-        # vertical separator
-        """StyledContainer(container=testing_container, variable_name="vertical_separator", left=390, top=0, width=1,
-                        height=370, bg_color=True, color="#bbb")
-        # horizontal separator
-        StyledContainer(container=testing_container, variable_name="horizontal_separator", left=0, top=370, width=390,
-                        height=1, bg_color=True, color="#bbb")"""
+        self.terminal = Terminal(
+            container=terminal_container, variable_name="terminal_text",
+            left=10, top=15, width=610, height=100
+        )
 
         # initial data load
+        self.start_btn.set_enabled(False)
+        self.stop_btn.set_enabled(False)
         self.build_table_rows()
         self.testing_container = testing_container
         return testing_container
 
     # ------------------------------------------------------------------ SEQUENCE CONTROL
     def start_sequence(self):
-        if not self.running:
-            self.running = True
-            self.run_in_thread(self._measure_sequence)
+        self.status = ["0"] * len(self.devicename)
+        self.pre_num = -1
+        self.build_table_rows()
+        file = File("shared_memory", "AutoSweep", 1, "DeviceNum", -1)
+        file.save()
 
     def stop_sequence(self):
-        self.running = False
+        file = File("shared_memory", "AutoSweep", 0)
+        file.save()
 
     def tsp_solve(self):
-        self.tsp_btn.set_enabled(False)
-        self.display_plot.set_image("my_res:wait.png")
-        solver = TSPSolver(
-            coord_json="./database/coordinates.json",
-            selected_json="./database/selection_serial.json",
-            time_limit=20,
-            output_dir="./res"
-        )
-        solver.solve_and_plot()
-        print(solver.path)
-        self.display_plot.set_image(f"my_res:{solver.path}")
-        self.filtered_idx = solver.route_idx[1:]
-        self.build_table_rows()
-        self.tsp_btn.set_enabled(True)
+        if self.filtered_idx:
+            self.tsp_btn.set_enabled(False)
+            self.start_btn.set_enabled(False)
+            self.stop_btn.set_enabled(False)
+            self.display_plot.set_image("my_res:TSP/wait.png")
+            solver = TSPSolver(
+                coord_json="./database/coordinates.json",
+                selected_json="./database/shared_memory.json",
+                time_limit=int(self.solve_time.get_value()),
+                output_dir="./res/TSP"
+            )
+            solver.solve_and_plot()
+            print(solver.path)
+            self.display_plot.set_image(f"my_res:TSP/{solver.path}")
+            self.filtered_idx = solver.route_idx[1:]
+            self.build_table_rows()
+            self.tsp_btn.set_enabled(True)
+            self.start_btn.set_enabled(True)
+            self.stop_btn.set_enabled(True)
+
+            filtered = {str(i + 1): self.coordinate[i][0:2] for i in self.filtered_idx}
+            file = File("shared_memory", "Image", f"TSP/{solver.path}", "Filtered", filtered)
+            file.save()
+        else:
+            print("You need to load the file first!")
 
     def load_file(self):
-        file_path = os.path.join(os.getcwd(), "database", "selection_serial.json")
-        if (self.init == False):
-            self.serial_list = []
-        else:
-            with open(file_path, "r") as f:
-                self.serial_list = json.load(f)
-        self.timestamp = -1
-        self.gds = lab_coordinates.coordinates(read_file=False, name="./database/coordinates.json")
-        self.number = self.gds.listdeviceparam("number")
-        self.coordinate = self.gds.listdeviceparam("coordinate")
-        self.polarization = self.gds.listdeviceparam("polarization")
-        self.wavelength = self.gds.listdeviceparam("wavelength")
-        self.type = self.gds.listdeviceparam("type")
-        self.devicename = [f"{name} ({num})" for name, num in zip(self.gds.listdeviceparam("devicename"), self.number)]
-        # status list (0 = not done, 1 = done)
-        self.status = ["0"] * len(self.devicename)
-        self.filtered_idx = [i - 1 for i in self.serial_list]  # current filter result (list of global indices)
-        self.page_size = 50
-        self.page_index = 0
-        if (self.init == True):
+        if self.serial_list:
+            self.gds = lab_coordinates.coordinates(read_file=False, name="./database/coordinates.json")
+            self.number = self.gds.listdeviceparam("number")
+            self.coordinate = self.gds.listdeviceparam("coordinate")
+            self.polarization = self.gds.listdeviceparam("polarization")
+            self.wavelength = self.gds.listdeviceparam("wavelength")
+            self.type = self.gds.listdeviceparam("type")
+            self.devicename = [f"{name} ({num})" for name, num in zip(self.gds.listdeviceparam("devicename"), self.number)]
+            self.status = ["0"] * len(self.devicename)
+            self.filtered_idx = [i - 1 for i in self.serial_list]  # current filter result (list of global indices)
+            self.page_size = 50
+            self.page_index = 0
             self.build_table_rows()
+        else:
+            print("No device found!")
 
     def open_file_path(self):
         app = wx.App(False)
@@ -347,40 +451,124 @@ class testing(App):
                           style=wx.DD_DEFAULT_STYLE) as dlg:
             if dlg.ShowModal() == wx.ID_OK:
                 self.save_path_input.set_text(dlg.GetPath())
+                self.notopen = False
                 print(f"You choose {dlg.GetPath()}")
         app.Destroy()
 
     def save_file(self):
-        src = os.path.join(os.getcwd(), "database", "selection_serial.json")
+        path = self.path_dd.get_value()
         dest_dir = self.save_path_input.get_text().strip()
 
-        if not os.path.isfile(src):
-            print(f"[Error] {src} does not exist.\n")
-            return
+        if path == "All":
+            src = os.path.join(os.getcwd(), "UserData", self.cur_user)
+            dest_path = os.path.join(dest_dir, self.cur_user)
+        else:
+            src = os.path.join(os.getcwd(), "UserData", self.cur_user, path)
+            dest_path = os.path.join(dest_dir, self.cur_user, path)
+
         if not dest_dir:
-            print("[Error] Save path is empty.\n")
+            print("❌ Save path cannot be empty!")
             return
-        if not os.path.isdir(dest_dir):
+
+        if not os.path.exists(dest_dir):
             try:
                 os.makedirs(dest_dir, exist_ok=True)
+                print(f"📁 Created destination directory: {dest_dir}")
             except Exception as e:
-                print(f"[Error] Create dir failed: {e}\n")
+                print(f"❌ Failed to create directory: {e}")
                 return
 
-        dest = os.path.join(dest_dir, "selection_serial.json")
+
+        if os.path.exists(dest_path):
+            try:
+                shutil.rmtree(dest_path)
+                print(f"⚠️ Removed existing directory: {dest_path}")
+            except Exception as e:
+                print(f"❌ Failed to remove existing directory: {e}")
+                return
+
         try:
-            shutil.copy(src, dest)
-            print(f"[OK] Copied to {dest}\n")
+            shutil.copytree(src, dest_path)
+            print(f"✅ Files saved to: {dest_path}")
         except Exception as e:
-            print(f"[Error] Copy failed: {e}\n")
+            print(f"❌ Copy failed: {e}")
+
+    def execute_command(self, path=command_path):
+        test = 0
+        record = 0
+        new_command = {}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                command = data.get("command", {})
+        except Exception as e:
+            print(f"[Error] Failed to load command: {e}")
+            return
+
+        for key, val in command.items():
+            if key.startswith("testing_control") and record == 0:
+                test = 1
+            elif key.startswith("devices_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("stage_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("tec_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("sensor_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("lim_set") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("as_set") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("fa_set") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("sweep_set") or record == 1:
+                record = 1
+                new_command[key] = val
+
+            elif key == "testing_load":
+                self.load_file()
+            elif key == "testing_time":
+                self.solve_time.set_value(val)
+            elif key == "testing_solve":
+                self.tsp_solve()
+            elif key == "testing_save":
+                self.save_file()
+            elif key == "testing_file":
+                self.path_dd.set_value(val)
+            elif key == "testing_path":
+                self.save_path_input.set_text(val)
+            elif key == "testing_stop":
+                self.stop_sequence()
+            elif key == "testing_start":
+                self.start_sequence()
+                self.auto_sweep = 1
+                time.sleep(1)
+            while self.auto_sweep == 1:
+                time.sleep(1)
+
+        if test == 1:
+            print("testing record")
+            file = File("command", "command", new_command)
+            file.save()
+
+
 
     def laser_sweep_setting(self):
         local_ip = get_local_ip()
         webview.create_window(
             "Setting",
             f"http://{local_ip}:7001",
-            width=262,
-            height=305,
+            width=262-w,
+            height=305-h,
             resizable=True,
             on_top=True,
         )

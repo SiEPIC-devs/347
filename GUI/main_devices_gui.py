@@ -1,13 +1,10 @@
 from remi.gui import *
 from lab_gui import *
 from remi import start, App
-import lab_coordinates
-import threading
-import math
-import json
-import os
+import lab_coordinates,threading, math, json
 from tinydb import TinyDB, Query
 
+command_path = os.path.join("database", "command.json")
 
 def fmt(val):
     try:
@@ -18,12 +15,39 @@ def fmt(val):
 
 class devices(App):
     def __init__(self, *args, **kwargs):
-        self.read_file()
+        self.gds = None
+        self.number = []
+        self.coordinate = []
+        self.polarization = []
+        self.wavelength = []
+        self.type = []
+        self.devicename = []
+        self.length = 0
+        self.checkbox_state = []
+        self.filtered_idx = []
+        self.page_size = 50
+        self.page_index = 0
+
+        self._user_mtime = None
+        self._first_command_check = True
         if "editing_mode" not in kwargs:
             super(devices, self).__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
     def idle(self):
         self.terminal.terminal_refresh()
+
+        try:
+            mtime = os.path.getmtime(command_path)
+        except FileNotFoundError:
+            mtime = None
+
+        if self._first_command_check:
+            self._user_mtime = mtime
+            self._first_command_check = False
+            return
+        if mtime != self._user_mtime:
+            self._user_mtime = mtime
+            self.execute_command()
 
     def main(self):
         return devices.construct_ui(self)
@@ -104,81 +128,125 @@ class devices(App):
         threading.Thread(target=target, args=args, daemon=True).start()
 
     def construct_ui(self):
-        devices_container = StyledContainer(variable_name="devices_container", left=0, top=0)
+        devices_container = StyledContainer(
+            variable_name="devices_container", left=0, top=0
+        )
 
         coordinate_container = StyledContainer(
             container=devices_container, variable_name="coordinate_container",
-            left=10, top=10, height=320, width=625, overflow=True, border=True)
+            left=10, top=10, height=320, width=625, overflow=True, border=True
+        )
 
-        headers = ["Device ID", "Test", "Mode", "Wvl", "Type", "GDS x", "GDS y"]
+        headers = ["Device ID", "Test", "Mode", "Wvl", "Type", "x", "y"]
         self.col_widths = [180, 30, 30, 50, 50, 60, 60]
 
         self.table = StyledTable(
             container=coordinate_container, variable_name="device_table",
-            left=0, top=0, height=30, table_width=620,
-            headers=headers, widths=self.col_widths, row=1)
+            left=0, top=0, height=30, table_width=620, headers=headers, widths=self.col_widths, row=1
+        )
 
         self.selection_container = StyledContainer(
             container=devices_container, variable_name="selection_container",
-            left=10, top=350, height=100, width=625, border=True)
+            left=10, top=350, height=100, width=625, border=True
+        )
+
         sc = self.selection_container
 
-        StyledLabel(container=sc, text="Device Selection Control", variable_name="device_selection_control",
-                    left=15, top=-12, width=185, height=20, font_size=120, color="#222", align="center",
-                    position="absolute", flex=True, on_line=True)
+        StyledLabel(
+            container=sc, text="Device Selection Control", variable_name="device_selection_control",
+            left=15, top=-12, width=185, height=20, font_size=120, color="#222", align="center",
+            position="absolute", flex=True, on_line=True
+        )
 
-        self.device_id = StyledTextInput(container=sc, variable_name="selection_id",
-                                         left=20, top=55, width=110, height=25)
-        self.device_mode = StyledDropDown(container=sc, text=["Any", "TE", "TM"],
-                                          variable_name="selection_mode",
-                                          left=160, top=55, width=60, height=25)
-        self.device_wvl = StyledDropDown(container=sc, text=["Any", "1550", "1310"],
-                                         variable_name="selection_wvl",
-                                         left=230, top=55, width=90, height=25)
-        self.device_type = StyledDropDown(container=sc,
-                                          text=["Any", "device", "PCM", "ybranch", "cutback"],
-                                          variable_name="selection_type",
-                                          left=330, top=55, width=90, height=25)
+        self.device_id = StyledTextInput(
+            container=sc, variable_name="selection_id", left=20, top=55, width=110, height=25
+        )
 
-        self.filter_btn = StyledButton(container=sc, text="Apply Filter", variable_name="reset_filter",
-                                          left=435, top=55, width=80, height=25)
-        self.clear_btn = StyledButton(container=sc, text="Clear All", variable_name="clear_all",
-                                         left=525, top=55, width=80, height=25)
-        self.all_btn = StyledButton(container=sc, text="Select All", variable_name="select_all",
-                                       left=525, top=20, width=80, height=25)
-        self.confirm_btn = StyledButton(container=sc, text="Confirm", variable_name="confirm",
-                                        left=435, top=20, width=80, height=25)
+        self.device_mode = StyledDropDown(
+            container=sc, text=["Any", "TE", "TM"], variable_name="selection_mode",
+            left=160, top=55, width=60, height=25
+        )
 
-        StyledLabel(container=sc, text="Device ID Contains", variable_name="device_id_contains",
-                    left=22, top=30, width=150, height=25)
-        StyledLabel(container=sc, text="Mode", variable_name="mode",
-                    left=162, top=30, width=100, height=25)
-        StyledLabel(container=sc, text="Wavelength", variable_name="wavelength",
-                    left=232, top=30, width=100, height=25)
-        StyledLabel(container=sc, text="Type", variable_name="type",
-                    left=332, top=30, width=100, height=25)
+        self.device_wvl = StyledDropDown(
+            container=sc, text=["Any", "1550", "1310"], variable_name="selection_wvl",
+            left=230, top=55, width=90, height=25
+        )
 
-        pg = StyledContainer(container=devices_container, variable_name="pagination_container",
-                             left=10, top=455, height=35, width=625)
+        self.device_type = StyledDropDown(
+            container=sc, text=["Any", "device", "PCM", "ybranch", "cutback"], variable_name="selection_type",
+            left=330, top=55, width=90, height=25
+        )
 
-        self.prev_btn = StyledButton(container=pg, text="◀ Prev", variable_name="prev_page",
-                                     left=0, top=5, width=80, height=25)
-        self.page_input = StyledTextInput(container=pg, variable_name="page_input",
-                                          left=100, top=5, width=25, height=25)
-        self.total_page_label = StyledLabel(container=pg, text=f"/ {self.total_pages()}",
-                                            variable_name="page_total",
-                                            left=145, top=5, width=40, height=25,
-                                            flex=True, justify_content="left")
-        self.jump_btn = StyledButton(container=pg, text="Go", variable_name="jump_page",
-                                     left=180, top=5, width=40, height=25)
-        self.next_btn = StyledButton(container=pg, text="Next ▶", variable_name="next_page",
-                                     left=235, top=5, width=80, height=25)
-        self.load_btn = StyledButton(container=pg, text="Load", variable_name="load_page",
-                                     left=330, top=5, width=60, height=25)
-        terminal_container = StyledContainer(container=devices_container, variable_name="terminal_container",
-                                             left=0, top=500, height=150, width=650, bg_color=True)
-        self.terminal = Terminal(container=terminal_container, variable_name="terminal_text",
-                                 left=10, top=15, width=610, height=100)
+        self.filter_btn = StyledButton(
+            container=sc, text="Apply Filter", variable_name="reset_filter", left=435, top=55, width=80, height=25
+        )
+
+        self.clear_btn = StyledButton(
+            container=sc, text="Clear All", variable_name="clear_all", left=525, top=55, width=80, height=25
+        )
+
+        self.all_btn = StyledButton(
+            container=sc, text="Select All", variable_name="select_all", left=525, top=20, width=80, height=25
+        )
+
+        self.confirm_btn = StyledButton(
+            container=sc, text="Confirm", variable_name="confirm", left=435, top=20, width=80, height=25
+        )
+
+        StyledLabel(
+            container=sc, text="Device ID Contains", variable_name="device_id_contains",
+            left=22, top=30, width=150, height=25
+        )
+
+        StyledLabel(
+            container=sc, text="Mode", variable_name="mode", left=162, top=30, width=100, height=25
+        )
+
+        StyledLabel(
+            container=sc, text="Wavelength", variable_name="wavelength", left=232, top=30, width=100, height=25
+        )
+
+        StyledLabel(
+            container=sc, text="Type", variable_name="type", left=332, top=30, width=100, height=25
+        )
+
+        pg = StyledContainer(
+            container=devices_container, variable_name="pagination_container", left=10, top=455, height=35, width=625
+        )
+
+        self.prev_btn = StyledButton(
+            container=pg, text="◀ Prev", variable_name="prev_page", left=0, top=5, width=80, height=25
+        )
+
+        self.page_input = StyledTextInput(
+            container=pg, variable_name="page_input", text="1", left=100, top=5, width=25, height=25
+        )
+
+        self.total_page_label = StyledLabel(
+            container=pg, text=f"/ {self.total_pages()}", variable_name="page_total",
+            left=145, top=5, width=40, height=25, flex=True, justify_content="left"
+        )
+
+        self.jump_btn = StyledButton(
+            container=pg, text="Go", variable_name="jump_page", left=180, top=5, width=40, height=25
+        )
+
+        self.next_btn = StyledButton(
+            container=pg, text="Next ▶", variable_name="next_page", left=235, top=5, width=80, height=25
+        )
+
+        self.load_btn = StyledButton(
+            container=pg, text="Load", variable_name="load_page", left=330, top=5, width=60, height=25
+        )
+
+        terminal_container = StyledContainer(
+            container=devices_container, variable_name="terminal_container",
+            left=0, top=500, height=150, width=650, bg_color=True
+        )
+
+        self.terminal = Terminal(
+            container=terminal_container, variable_name="terminal_text", left=10, top=15, width=610, height=100
+        )
 
         self.prev_btn.do_onclick(lambda *_: self.run_in_thread(self.goto_prev_page))
         self.next_btn.do_onclick(lambda *_: self.run_in_thread(self.goto_next_page))
@@ -251,19 +319,14 @@ class devices(App):
         if not selected_idx:
             print("No device selected — serial not saved.")
             return
+        file = File("shared_memory", "Selection", selected_idx)
+        file.save()
 
-        db_folder = os.path.join(os.getcwd(), "database")
-        os.makedirs(db_folder, exist_ok=True)
-        path = os.path.join(db_folder, "selection_serial.json")
-
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(selected_idx, f, indent=2)
-
-        print(f"Serial saved to {path}")
 
     def onclick_load(self):
         self.read_file()
         self.build_table_rows()
+        self.load_count = 1
 
     def read_file(self):
         self.gds = lab_coordinates.coordinates(read_file=False, name="./database/coordinates.json")
@@ -280,6 +343,84 @@ class devices(App):
         self.filtered_idx = list(range(self.length))
         self.page_size = 50
         self.page_index = 0
+
+    def execute_command(self, path=command_path):
+        device = 0
+        record = 0
+        new_command = {}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                command = data.get("command", {})
+        except Exception as e:
+            print(f"[Error] Failed to load command: {e}")
+            return
+
+        for key, val in command.items():
+            if key.startswith("devices_control") and record == 0:
+                device = 1
+            elif key.startswith("testing_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("stage_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("tec_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("sensor_control") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("lim_set") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("as_set") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("fa_set") or record == 1:
+                record = 1
+                new_command[key] = val
+            elif key.startswith("sweep_set") or record == 1:
+                record = 1
+                new_command[key] = val
+
+            elif key == "devices_load":
+                self.onclick_load()
+            elif key == "devices_all":
+                self.onclick_all()
+            elif key == "devices_clear":
+                self.onclick_clear()
+            elif key == "devices_filter":
+                self.onclick_filter()
+            elif key == "devices_id":
+                self.device_id.set_text(val)
+            elif key == "devices_mode":
+                self.device_mode.set_value(val)
+            elif key == "devices_wvl":
+                self.device_wvl.set_value(str(val))
+            elif key == "devices_type":
+                self.device_type.set_value(val)
+            elif key == "devices_sel":
+                for i in val:
+                    self.checkbox_state[i-1] = True
+                    cb = getattr(self, f"test_{i-1}", None)
+                    if cb is not None:
+                        cb.set_value(True)
+            elif key == "devices_del":
+                for i in val:
+                    self.checkbox_state[i-1] = False
+                    cb = getattr(self, f"test_{i-1}", None)
+                    if cb is not None:
+                        cb.set_value(False)
+            elif key == "devices_confirm":
+                self.onclick_confirm()
+
+        if device == 1:
+            print("device record")
+            time.sleep(1)
+            file = File("command", "command", new_command)
+            file.save()
 
 
 

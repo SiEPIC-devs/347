@@ -6,22 +6,14 @@ Remi GUI — User/Mode selector with dynamic dropdown + JSON sync
 * No functional change versus the original script — only formatting / layout tidy-up
 """
 
-import json
-import os
-import shutil
-import threading
+import json, os, shutil, threading, webview
 from typing import List, Union
-
-import webview
-from remi.gui import *
 from remi import App, start
-
-# NOTE: external helper modules (keep as-is)
 from lab_gui import *
 
 # ──────────────────────────────────────────
-ROOT_DIR = ".\\UserData"
-JSON_PATH = ".\\database\\current_user.json"
+ROOT_DIR = "./UserData"
+JSON_PATH = "database/shared_memory.json"
 
 
 class Starts(App):
@@ -32,6 +24,9 @@ class Starts(App):
     def __init__(self, *args, **kwargs):
         # runtime flags
         self._last_saved_user: str = ""
+        self._last_saved_project: str = ""
+        self._last_user: Union[str, List[str]] = ""
+        self._last_project: Union[str, List[str]] = ""
         if "editing_mode" not in kwargs:
             super().__init__(*args, **{"static_file_path": {"my_res": "./res/"}})
 
@@ -39,26 +34,31 @@ class Starts(App):
         """Refresh terminal & sync dropdown/JSON when things change."""
         self.terminal.terminal_refresh()
 
-        # 1) folder list changed → refresh dropdown
-        now = tuple(self.list_user_folders())
-        if getattr(self, "_last_folders", None) != now:
-            self.refresh()
-            self._last_folders = now
+        now_user = tuple(self.list_user_folders())
+        if getattr(self, "_last_user", None) != now_user:
+            self.refresh_user()
+            self.refresh_project()
+            self._last_user = now_user
 
-        # 2) current dropdown selection changed → write JSON
+        now_project = tuple(self.list_project_folders())
+        if getattr(self, "_last_project", None) != now_project:
+            self.refresh_project()
+            self._last_project = now_project
+
         current_user = self.user_dd.get_value()
+        current_project = self.project_dd.get_value()
         if current_user != self._last_saved_user:
-            try:
-                with open(JSON_PATH, "w", encoding="utf-8") as f:
-                    json.dump({"user": current_user}, f)
-            except Exception as exc:
-                print(f"❌ Failed to write JSON: {exc}")
+            file = File("shared_memory", "User", current_user)
+            file.save()
             self._last_saved_user = current_user
+            self.refresh_project()
+        if current_project != self._last_saved_project:
+            file = File("shared_memory", "Project", current_project)
+            file.save()
+            self._last_saved_project = current_project
 
     def main(self):
         return self.construct_ui()
-
-    # ──────────────────────────────── HELPERS
 
     def run_in_thread(self, target, *args) -> None:
         threading.Thread(target=target, args=args, daemon=True).start()
@@ -71,11 +71,27 @@ class Starts(App):
         ]
         if not names:
             return ""
+        if "Guest" in names:
+            names.remove("Guest")
+            names = ["Guest"] + sorted(names)
+        else:
+            names = sorted(names)
         if len(names) == 1:
             return names[0]
         return names
 
-    # ──────────────────────────────── UI
+    def list_project_folders(self) -> Union[str, List[str]]:
+        """Return sub-folders of ROOT_DIR (same logic as original)."""
+        path = os.path.join(ROOT_DIR, self.user_dd.get_value())
+        names = [
+            d for d in os.listdir(path)
+            if os.path.isdir(os.path.join(path, d))
+        ]
+        if not names:
+            return ""
+        if len(names) == 1:
+            return names[0]
+        return names
 
     def construct_ui(self):
         """Build and return the root container."""
@@ -83,145 +99,109 @@ class Starts(App):
             variable_name="starts_container", left=0, top=0
         )
 
-        # ── dropdowns
         user_folders = self.list_user_folders()
         self.user_dd = StyledDropDown(
-            container=starts_container,
-            text=user_folders,
-            variable_name="set_user",
-            left=260,
-            top=100,
-            width=220,
-            height=30,
+            container=starts_container, text=user_folders, variable_name="set_user",
+            left=210, top=100, width=220, height=30,
         )
-        self.mode_dd = StyledDropDown(
-            container=starts_container,
-            text=["TE mode", "TM mode"],
-            variable_name="set_mode",
-            left=260,
-            top=140,
-            width=220,
-            height=30,
+
+        self.project_dd = StyledDropDown(
+            container=starts_container, text="Project1", variable_name="set_mode",
+            left=210, top=140, width=220, height=30,
         )
 
         StyledLabel(
-            container=starts_container,
-            text="User:",
-            variable_name="label_user",
-            left=100,
-            top=105,
-            width=150,
-            height=20,
-            font_size=100,
-            color="#444",
-            align="right",
+            container=starts_container, text="User", variable_name="label_user",
+            left=50, top=105, width=150, height=20, font_size=100, color="#444", align="right",
         )
         StyledLabel(
-            container=starts_container,
-            text="Operating Mode:",
-            variable_name="label_mode",
-            left=100,
-            top=145,
-            width=150,
-            height=20,
-            font_size=100,
-            color="#444",
-            align="right",
+            container=starts_container, text="Project", variable_name="label_mode",
+            left=50, top=145, width=150, height=20, font_size=100, color="#444", align="right",
         )
 
         StyledLabel(
-            container=starts_container,
-            text="Welcome to 347 Probe Stage",
-            variable_name="label_configuration",
-            left=180,
-            top=20,
-            width=300,
-            height=20,
-            font_size=150,
-            color="#222",
-            align="left",
+            container=starts_container, text="Welcome to 347 Probe Stage", variable_name="label_configuration",
+            left=180, top=20, width=300, height=20, font_size=150, color="#222", align="left",
         )
 
-        # ── buttons
         self.add_btn = StyledButton(
-            container=starts_container,
-            text="Add",
-            variable_name="add",
-            left=260,
-            top=180,
-            normal_color="#007BFF",
-            press_color="#0056B3",
-        )
-        self.remove_btn = StyledButton(
-            container=starts_container,
-            text="Remove",
-            variable_name="remove",
-            left=380,
-            top=180,
-            normal_color="#dc3545",
-            press_color="#c82333",
+            container=starts_container, text="Add", variable_name="add",
+            left=270, top=180, normal_color="#007BFF", press_color="#0056B3",
         )
 
-        # ── terminal
-        terminal_container = StyledContainer(
-            container=starts_container,
-            variable_name="terminal_container",
-            left=0,
-            top=500,
-            height=150,
-            width=650,
-            bg_color=True,
+        self.user_btn = StyledButton(
+            container=starts_container, text="Remove", variable_name="user_remove",
+            left=440, top=100, width=60, height=30, normal_color="#dc3545", press_color="#c82333",
         )
+
+        self.project_btn = StyledButton(
+            container=starts_container, text="Remove", variable_name="project_remove",
+            left=440, top=140, width=60, height=30, normal_color="#dc3545", press_color="#c82333",
+        )
+
+        terminal_container = StyledContainer(
+            container=starts_container, variable_name="terminal_container",
+            left=0, top=500, height=150, width=650, bg_color=True,
+        )
+
         self.terminal = Terminal(
-            container=terminal_container,
-            variable_name="terminal_text",
-            left=10,
-            top=15,
-            width=610,
-            height=100,
+            container=terminal_container, variable_name="terminal_text",
+            left=10, top=15, width=610, height=100,
         )
 
         # ── event bindings
         self.add_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_add))
-        self.remove_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_remove))
+        self.user_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_user_remove))
+        self.project_btn.do_onclick(lambda *_: self.run_in_thread(self.onclick_project_remove))
 
         self.starts_container = starts_container
         return starts_container
 
-    # ──────────────────────────────── CALLBACKS
-
     def onclick_add(self):
+        file = File("shared_memory", "User_add", self.user_dd.get_value())
+        file.save()
         local_ip = get_local_ip()
         webview.create_window(
             "Setting",
             f"http://{local_ip}:7000",
-            width=247,
-            height=105,
+            width=212,
+            height=185,
             resizable=True,
-            on_top=True,
+            on_top=True
         )
 
-    def onclick_remove(self):
+    def onclick_user_remove(self):
         folder = self.user_dd.get_value().replace(" ", "")
         path = os.path.join(ROOT_DIR, folder)
         if not os.path.isdir(path):
-            print(f"⚠️ No such folder: {path}")
+            print(f"⚠️ No such folder: {folder}")
             return
         try:
             shutil.rmtree(path)
-            print(f"🗑️ Removed {path}")
+            print(f"🗑️ Removed {folder}")
         except Exception as exc:
             print(f"❌ Failed to remove: {exc}")
 
-    # ──────────────────────────────── DROPDOWN REFRESH
+    def onclick_project_remove(self):
+        user = self.user_dd.get_value().replace(" ", "")
+        project = self.project_dd.get_value().replace(" ", "")
+        path = os.path.join(ROOT_DIR, user, project)
+        if not os.path.isdir(path):
+            print(f"⚠️ No such project: {project}")
+            return
+        try:
+            shutil.rmtree(path)
+            print(f"🗑️ Removed {project}")
+        except Exception as exc:
+            print(f"❌ Failed to remove: {exc}")
 
-    def refresh(self):
+    def refresh_user(self):
         self.user_dd.empty()
         self.user_dd.append(self.list_user_folders())
 
-
-# ────────────────────────────────────────── RUN
-
+    def refresh_project(self):
+        self.project_dd.empty()
+        self.project_dd.append(self.list_project_folders())
 
 def run_remi():
     start(

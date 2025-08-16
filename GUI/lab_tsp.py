@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 import matplotlib.pyplot as plt
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+import matplotlib
 
 
 class TSPSolver:
@@ -24,6 +25,7 @@ class TSPSolver:
 
         self.numbers = [0]
         self.points  = [(0, 0)]
+        self.selected_numbers = []
 
         self._load_selected_numbers()
         self._load_coordinates()
@@ -55,8 +57,12 @@ class TSPSolver:
     # ------------------------------------------------------------------
     def _load_selected_numbers(self) -> None:
         with self.selected_json.open("r", encoding="utf-8") as f:
-            self.selected_numbers = set(json.load(f))
-        print(self.selected_numbers)
+            try:
+                data = json.load(f)
+                self.selected_numbers = set(data.get("Selection", []))
+            except json.JSONDecodeError as e:
+                print(f"❌ Failed to parse JSON: {e}")
+                self.selected_numbers = set()
 
     def _load_coordinates(self) -> None:
         with self.coord_json.open("r", encoding="utf-8") as f:
@@ -124,6 +130,7 @@ class TSPSolver:
         return xs, ys, total_dist
 
     def _plot_route(self, xs, ys, png_path: Path) -> None:
+        matplotlib.use("Agg")
         plt.figure(figsize=(8, 8))
         plt.plot(xs, ys, '-o', markersize=3, linewidth=1)
         plt.title("TSP Route")
