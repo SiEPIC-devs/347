@@ -1,6 +1,6 @@
 # NIR/test/test_vi.py
 import time
-from NIR.nir import NIR8164
+from NIR.nir_controller import NIR8164
 
 def main():
     dev = NIR8164(com_port=3, gpib_addr=20)
