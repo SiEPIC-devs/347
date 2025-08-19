@@ -118,9 +118,7 @@ class NIR8164(LaserHAL):
         self.inst.write('++read eoi')
 
         header = self.inst.read_bytes(2)
-        print(header)
         if header[0:1] != b"#":
-            
             raise ValueError("Invalid SCPI block header")
 
         num_digits = int(header[1:2].decode())
@@ -130,13 +128,12 @@ class NIR8164(LaserHAL):
         data_block = b""
         remaining = data_len
         while remaining > 0:
-            print("herehere")
             chunk = self.inst.read_bytes(min(remaining, 4096))
             data_block += chunk
             remaining -= len(chunk)
-        print(data_block)
         try:
             self.inst.read()  # trailing LF if present
+
         except Exception:
             pass
 
@@ -347,7 +344,6 @@ class NIR8164(LaserHAL):
         return False
 
     def retrieve_scan_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        print("you made it here")
         time.sleep(0.5)
         ch1 = self._query_binary_and_parse("SENS1:CHAN1:FUNC:RES?")
         time.sleep(0.4)
