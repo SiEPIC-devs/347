@@ -290,18 +290,18 @@ class NIR8164(LaserHAL):
     ######################################################################
 
     def configure_and_start_lambda_sweep(
-            self, start_nm: float, stop_nm: float, step_nm: float,
-            laser_power_dbm: float = -10, avg_time_s: float = 0.01
-    ) -> bool:
+        self, start_nm: float, stop_nm: float, step_nm: float,
+        laser_power_dbm: float = -10, avg_time_s: float = 0.01
+        ) -> bool:
         try:
             self._preflight_cleanup()
             self.start_wavelength = start_nm * 1e-9
-            self.stop_wavelength = stop_nm * 1e-9
+            self.stop_wavelength  = stop_nm  * 1e-9
             self.step_size = f"{step_nm}NM"
             self.laser_power = laser_power_dbm
             self.averaging_time = avg_time_s
             self.num_points = int((stop_nm - start_nm) / step_nm) + 1
-            sweep_speed = step_nm / avg_time_s # NM/S
+            sweep_speed = step_nm / avg_time_s  # NM/S
 
             # Laser config
             self.write("*CLS")
@@ -314,37 +314,27 @@ class NIR8164(LaserHAL):
             self.write(f"SOUR0:WAV:SWE:STAR {self.start_wavelength}")
             self.write(f"SOUR0:WAV:SWE:STOP {self.stop_wavelength}")
             self.write(f"SOUR0:WAV:SWE:STEP {self.step_size}")
-            self.write(f"SOUR0:WAV:SWE:SPE {sweep_speed}NM/S")
+            self.write(f"SOUR0:WAV:SWE:SPEed {sweep_speed}NM/S")   
             self.write("SOUR0:WAV:SWE:REP ONEW")
             self.write("SOUR0:WAV:SWE:CYCL 1")
             self.write("SOUR0:AM:STATe OFF")
-            # print("swp")
+
             # Lambda config
-            self.write("TRIG0:OUTP STF")
-            self.write("SOUR0:WAVE:SWE:LLOG 1")
-            # print("lmb")
-            ok = self.query("SOUR0:WAV:SWE:CHECkparams?") # sanity check
-            # print("ok", ok)
+            self.write("TRIG0:OUTP STFinished")                     
+            self.write("SOUR0:WAV:SWE:LLOG 1")                      
+
+            ok = self.query("SOUR0:WAV:SWE:CHECkparams?")  # sanity check 
             if "OK" not in ok.strip().upper():
                 raise RuntimeError(f"Sweep Params are inconsistent: {ok}")
-            # print("pok")
-            # exp = self.query("SOUR:WAV:SWE:EXP?")
-            # try:
-            #     n_exp = int(exp.strip().lstrip("+"))
-            #     print(f"n_exp = {n_exp}, exp = {exp}")
-            # except:
-            #     print(f"exp = {exp}")
-            #     raise
 
-            get_pt = self.query("SENSe1:CHANnel1:FUNCtion:PARameter:LOGGing?")
-            pts = get_pt.split("+")[1].replace(",","")
-            # self.write(:)
-            # self.write("SENS1:FUNC 'POWer'")
-            self.write(f"SENS1:FUNC:PAR:LOGG {pts},{avg_time_s}")
+            # Detector logging: select function, then set LOGG 
+            self.write("SENS1:FUNC 'POWer'")                       
+            self.write(f"SENS1:FUNC:PAR:LOGG {self.num_points},{avg_time_s}")      
+            self.write(f"SENS1:CHAN1:FUNC:PAR:LOGG {self.num_points},{avg_time_s}")
+            self.write(f"SENS1:CHAN2:FUNC:PAR:LOGG {self.num_points},{avg_time_s}")
+
             self.write("SENS1:FUNC:STAT LOGG,START")
-            # self.write("SOUR0:WAV:SWE:LLOG 1")
-            # print("i got here also")
-            time.sleep(0.3) # breathe
+            time.sleep(0.3)  # breathe
 
             return True
         except Exception:
@@ -352,7 +342,6 @@ class NIR8164(LaserHAL):
             return False
 
     def execute_lambda_scan(self, timeout_s: float = 300) -> bool:
-        print("Am i even real?")
         self.write("SOUR0:WAV:SWE:STAT START")
         t0 = time.time()
         flag = True
