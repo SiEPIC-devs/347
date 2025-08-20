@@ -18,9 +18,9 @@ Cameron Basara, 2025
 
 class NIR8164(LaserHAL):
     def __init__(self, com_port: int = 3, gpib_addr: int = 20,
-        laser_slot: int = 1, detector_slots: List[int] = [1], # not yet implemented
-        safety_password: str ="1234", timeout_ms: int = 30000):
-        
+                 laser_slot: int = 1, detector_slots: List[int] = [1], # not yet implemented
+                 safety_password: str ="1234", timeout_ms: int = 30000):
+
         self.com_port = com_port
         self.gpib_addr = gpib_addr
         self.timeout_ms = timeout_ms
@@ -77,7 +77,7 @@ class NIR8164(LaserHAL):
             return True
         except Exception as e:
             raise ConnectionError(f"{e}")
-        
+
     def disconnect(self) -> bool:
         try:
             self.cleanup_scan()
@@ -137,7 +137,7 @@ class NIR8164(LaserHAL):
         except Exception:
             pass
 
-        
+
         data = struct.unpack("<" + "f" * (len(data_block) // 4), data_block)
         arr = np.array(data, dtype=np.float32)
 
@@ -160,9 +160,9 @@ class NIR8164(LaserHAL):
         finally:
             self.inst.timeout = old
 
-######################################################################
-# Laser functions 
-######################################################################
+    ######################################################################
+    # Laser functions
+    ######################################################################
 
     def configure_units(self) -> None:
         """Configured nir to dBm"""
@@ -197,15 +197,15 @@ class NIR8164(LaserHAL):
     def enable_output(self, on: bool) -> None:
         """Turn laser on and off"""
         self.write(f"SOUR0:POW:STAT {'ON' if on else 'OFF'}")
-    
+
     def get_output_state(self):
         state = self.query("SOUR0:POW:STAT?")
         state = "1" in state
         return state
 
-######################################################################
-# Detector functions 
-######################################################################
+    ######################################################################
+    # Detector functions
+    ######################################################################
 
     def set_detector_units(self, units: int = 0) -> None:
         """
@@ -249,7 +249,7 @@ class NIR8164(LaserHAL):
             return True
         except Exception as e:
             return False
-    
+
     def get_power_range(self) -> bool:
         """Get power range for both slots"""
         try:
@@ -260,9 +260,9 @@ class NIR8164(LaserHAL):
         except Exception as e:
             return False
 
-######################################################################
-# Sweep functions 
-######################################################################
+    ######################################################################
+    # Sweep functions
+    ######################################################################
 
     def set_sweep_range_nm(self, start_nm: float, stop_nm: float) -> None:
         self.write(f"SOUR0:WAV:SWE:STAR {start_nm*1e-9}")
@@ -285,13 +285,13 @@ class NIR8164(LaserHAL):
     def get_sweep_state(self) -> str:
         return self.query("SOUR0:WAV:SWE:STAT?")
 
-######################################################################
-# Lambda scan functions
-######################################################################
+    ######################################################################
+    # Lambda scan functions
+    ######################################################################
 
     def configure_and_start_lambda_sweep(
-        self, start_nm: float, stop_nm: float, step_nm: float,
-        laser_power_dbm: float = -10, avg_time_s: float = 0.01
+            self, start_nm: float, stop_nm: float, step_nm: float,
+            laser_power_dbm: float = -10, avg_time_s: float = 0.01
     ) -> bool:
         try:
             self._preflight_cleanup()
@@ -301,38 +301,65 @@ class NIR8164(LaserHAL):
             self.laser_power = laser_power_dbm
             self.averaging_time = avg_time_s
             self.num_points = int((stop_nm - start_nm) / step_nm) + 1
+            sweep_speed = step_nm / avg_time_s # NM/S
 
+            # Laser config
             self.write("*CLS")
             self.write(f"SOUR0:POW {laser_power_dbm}")
             self.write("SOUR0:POW:STAT ON")
-
             self.write(f"SOUR0:WAV {self.start_wavelength}")
 
+            # Sweep config
             self.write("SOUR0:WAV:SWE:MODE CONT")
             self.write(f"SOUR0:WAV:SWE:STAR {self.start_wavelength}")
             self.write(f"SOUR0:WAV:SWE:STOP {self.stop_wavelength}")
             self.write(f"SOUR0:WAV:SWE:STEP {self.step_size}")
+            self.write(f"SOUR0:WAV:SWE:SPE {sweep_speed}NM/S")
             self.write("SOUR0:WAV:SWE:REP ONEW")
             self.write("SOUR0:WAV:SWE:CYCL 1")
+            self.write("SOUR0:AM:STATe OFF")
+            # print("swp")
+            # Lambda config
+            self.write("TRIG0:OUTP STF")
+            self.write("SOUR0:WAVE:SWE:LLOG 1")
+            # print("lmb")
+            ok = self.query("SOUR0:WAV:SWE:CHECkparams?") # sanity check
+            # print("ok", ok)
+            if "OK" not in ok.strip().upper():
+                raise RuntimeError(f"Sweep Params are inconsistent: {ok}")
+            # print("pok")
+            # exp = self.query("SOUR:WAV:SWE:EXP?")
+            # try:
+            #     n_exp = int(exp.strip().lstrip("+"))
+            #     print(f"n_exp = {n_exp}, exp = {exp}")
+            # except:
+            #     print(f"exp = {exp}")
+            #     raise
 
-            self.write("SENS1:FUNC 'POWer'")
             get_pt = self.query("SENSe1:CHANnel1:FUNCtion:PARameter:LOGGing?")
             pts = get_pt.split("+")[1].replace(",","")
+            # self.write(:)
+            # self.write("SENS1:FUNC 'POWer'")
             self.write(f"SENS1:FUNC:PAR:LOGG {pts},{avg_time_s}")
             self.write("SENS1:FUNC:STAT LOGG,START")
+            # self.write("SOUR0:WAV:SWE:LLOG 1")
+            # print("i got here also")
+            time.sleep(0.3) # breathe
 
-            self.write("SOUR0:WAV:SWE:STAT START") 
             return True
         except Exception:
             _ = self.query("SYST:ERR?")
             return False
 
     def execute_lambda_scan(self, timeout_s: float = 300) -> bool:
+        print("Am i even real?")
+        self.write("SOUR0:WAV:SWE:STAT START")
         t0 = time.time()
         flag = True
         while (time.time() - t0) < timeout_s:
             swe = self.query("SOUR0:WAV:SWE:STAT?").strip()
             fun = self.query("SENS1:CHAN1:FUNC:STAT?").strip()
+            print(swe, fun)
             if "0" in swe:
                 sweep_complete_in = True
                 if sweep_complete_in and flag:
@@ -346,23 +373,24 @@ class NIR8164(LaserHAL):
     def retrieve_scan_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         time.sleep(0.5)
         ch1 = self._query_binary_and_parse("SENS1:CHAN1:FUNC:RES?")
-        time.sleep(0.4)
+        # time.sleep(0.4)
         ch2 = self._query_binary_and_parse("SENS1:CHAN2:FUNC:RES?")
 
         wl = np.linspace(self.start_wavelength * 1e9,
-                        self.stop_wavelength * 1e9,
-                        len(ch1))
+                         self.stop_wavelength * 1e9,
+                         len(ch1))
         ch1 = np.where(ch1 > 0, np.nan, ch1)
         ch2 = np.where(ch2 > 0, np.nan, ch2)
         return wl, ch1, ch2
 
     def optical_sweep(
-        self, start_nm: float, stop_nm: float, step_nm: float,
-        laser_power_dbm: float, averaging_time_s: float = 0.02
+            self, start_nm: float, stop_nm: float, step_nm: float,
+            laser_power_dbm: float, averaging_time_s: float = 0.02
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         pts = int(((float(stop_nm) - float(start_nm)) / float(step_nm)) + 1.0000001)
         self.stitching = pts > 20001
         if self.stitching:
+            print("i am stitching")
             segments = int(np.ceil(pts/20001.0))
             seg_span = int(np.ceil((stop_nm - start_nm)/segments))
             bottom = int(start_nm)
@@ -382,10 +410,245 @@ class NIR8164(LaserHAL):
                 bottom = top + step_nm
             return wl, ch1, ch2
         else:
-            self.configure_and_start_lambda_sweep(start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s)
-            self.execute_lambda_scan()
+            aok = self.configure_and_start_lambda_sweep(start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s)
+            if aok:
+                pass
+            else:
+                print("grrr")
+            bok = self.execute_lambda_scan()
+            if bok:
+                pass
+            else:
+                print("brrrr")
             return self.retrieve_scan_data()
-    
+
+    def prepare_llog_sweep(
+            self,
+            start_nm: float,
+            stop_nm: float,
+            step_nm: float,
+            laser_power_dbm: float = -10.0,
+            avg_time_s: float = 0.01,
+            speed_nm_s: float = 0.05,  # sweep speed in nm/s
+    ) -> bool:
+        """
+        Prepare a continuous sweep with Lambda Logging (LLOG) and internal triggers.
+        Does NOT start logging or the sweep. Call execute_llog_sweep() after this.
+        """
+        try:
+            self._preflight_cleanup()
+
+            # Save state
+            self.start_wavelength = start_nm * 1e-9
+            self.stop_wavelength = stop_nm * 1e-9
+            self.step_size = f"{step_nm}NM"
+            self.laser_power = laser_power_dbm
+            self.averaging_time = avg_time_s
+            self.num_points = int((stop_nm - start_nm) / step_nm) + 1
+
+            # Laser basic setup
+            self.write("*CLS")
+            self.write("SOUR0:POW:UNIT 0")
+            self.write(f"SOUR0:POW {laser_power_dbm}")
+            self.write("SOUR0:POW:STAT ON")
+            self.write(f"SOUR0:WAV {self.start_wavelength}")
+
+            # Sweep config (continuous mode, one way, 1 cycle)
+            self.write("SOUR0:WAV:SWE:MODE CONT")
+            self.write(f"SOUR0:WAV:SWE:STAR {self.start_wavelength}")
+            self.write(f"SOUR0:WAV:SWE:STOP {self.stop_wavelength}")
+            self.write(f"SOUR0:WAV:SWE:STEP {self.step_size}")
+            # Sweep speed is specified in meters/second; convert nm/s -> m/s
+            self.write(f"SOUR0:WAV:SWE:SPE {speed_nm_s * 1e-9}")
+            self.write("SOUR0:WAV:SWE:REP ONEW")
+            self.write("SOUR0:WAV:SWE:CYCL 1")
+
+            # Enable lambda logging on the laser
+            self.write("SOUR0:WAV:SWE:LLOG 1")  # 1=enable, 0=disable
+
+            # Internal trigger: route Step-Finished from the laser to Node A
+            # Use your laser slot index if needed; TRIG1 means slot 1 in the mainframe.
+            # We stick to laser_slot to be explicit.
+            self.write(f"TRIG0:OUTP STF")
+
+            # Power meter logging function
+            self.write("SENS1:FUNC 'POWer'")
+            # Points + averaging time (seconds)
+            self.write(f"SENS1:FUNC:PAR:LOGG {self.num_points},{avg_time_s}")
+
+            # Do NOT start logging here; that happens in execute_llog_sweep()
+            return True
+        except Exception:
+            _ = self.query("SYST:ERR?")
+            return False
+
+    def execute_llog_sweep(self, timeout_s: float = 300) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Execute previously prepared LLOG sweep.
+        Returns (wl_nm, ch1_dbm, ch2_dbm).
+        """
+        import numpy as _np
+        t0 = time.time()
+
+        # Start logging first so we don't miss the first trigger
+        self.write("SENS1:FUNC:STAT LOGG,START")
+        # Then start the sweep
+        self.write("SOUR0:WAV:SWE:STAT START")
+
+        # Wait for completion (either the logger completes, or sweep stops)
+        while (time.time() - t0) < timeout_s:
+            swe = self.query("SOUR0:WAV:SWE:STAT?").strip()
+            fun = self.query("SENS1:CHAN1:FUNC:STAT?").strip()
+            if "COMPLETE" in fun:
+                break
+            if "0" in swe:  # sweep stopped
+                break
+            time.sleep(0.5)
+
+        # Read power results (4-byte floats in W unless you've set dBm units; you set dBm)
+        ch1 = self._query_binary_block("SENS1:CHAN1:FUNC:RES?", dtype="<f4")
+        time.sleep(0.2)
+        ch2 = self._query_binary_block("SENS1:CHAN2:FUNC:RES?", dtype="<f4")
+
+        # Read actual wavelengths from the laser LLOG buffer (8-byte doubles, in meters)
+        # [:SOUR0]:READout:DATA? LLOG returns the sample positions for the last sweep.
+        try:
+            wl_m = self._query_binary_block("SOUR0:READ:DATA? LLOG", dtype="<f8")
+            wl_nm = wl_m * 1e9
+        except Exception:
+            # Fallback: reconstruct if LLOG buffer isn’t available for some reason
+            wl_nm = _np.linspace(self.start_wavelength * 1e9, self.stop_wavelength * 1e9, len(ch1))
+
+        # Sanity-align lengths (trim to the shortest)
+        n = min(len(wl_nm), len(ch1), len(ch2))
+        wl_nm = wl_nm[:n]
+        ch1 = ch1[:n]
+        ch2 = ch2[:n]
+
+        # Your code keeps values in dBm already; leave as-is
+        return wl_nm, ch1, ch2
+
+    def _query_binary_block(self, command: str, dtype: str = "<f4") -> np.ndarray:
+        """
+        Generic IEEE 488.2 definite-length block reader.
+        dtype: '<f4' for 4-byte float (logger power results), '<f8' for 8-byte double (LLOG wavelengths).
+        """
+        if not self.inst:
+            raise RuntimeError("Not connected")
+        self.drain()
+        self.inst.write(command)
+        time.sleep(0.5)
+        self.inst.write('++read eoi')
+
+        header = self.inst.read_bytes(2)  # b"#" + digit count
+        if header[0:1] != b"#":
+            raise ValueError("Invalid SCPI block header")
+        num_digits = int(header[1:2].decode())
+        data_len = int(self.inst.read_bytes(num_digits).decode())
+
+        # Read the data payload
+        data_block = b""
+        remaining = data_len
+        while remaining > 0:
+            chunk = self.inst.read_bytes(min(remaining, 8192))
+            data_block += chunk
+            remaining -= len(chunk)
+
+        # Consume possible trailing LF
+        try:
+            self.inst.read()
+        except Exception:
+            pass
+
+        item_size = 8 if dtype.endswith("f8") else 4
+        if len(data_block) % item_size != 0:
+            raise ValueError("Binary data length not aligned with dtype")
+
+        arr = np.frombuffer(data_block, dtype=dtype, count=len(data_block) // item_size)
+        return arr.copy()  # ensure not a view into the bytes buffer
+
+    def prepare_step_sweep(
+            self,
+            start_nm: float,
+            stop_nm: float,
+            step_nm: float,
+            laser_power_dbm: float = -10.0,
+            avg_time_s: float = 0.01,
+    ) -> bool:
+        """
+        Prepare a true STEP sweep (no LLOG). The laser moves point-to-point,
+        and Step-Finished triggers clock the power meter logger.
+        """
+        try:
+            self._preflight_cleanup()
+
+            # Save state
+            self.start_wavelength = start_nm * 1e-9
+            self.stop_wavelength = stop_nm * 1e-9
+            self.step_size = f"{step_nm}NM"
+            self.laser_power = laser_power_dbm
+            self.averaging_time = avg_time_s
+            self.num_points = int((stop_nm - start_nm) / step_nm) + 1
+
+            # Laser setup
+            self.write("*CLS")
+            self.write("SOUR0:POW:UNIT 0")
+            self.write(f"SOUR0:POW {laser_power_dbm}")
+            self.write("SOUR0:POW:STAT ON")
+            self.write(f"SOUR0:WAV {self.start_wavelength}")
+
+            # STEP mode config
+            self.write("SOUR0:WAV:SWE:MODE STEP")
+            self.write(f"SOUR0:WAV:SWE:STAR {self.start_wavelength}")
+            self.write(f"SOUR0:WAV:SWE:STOP {self.stop_wavelength}")
+            self.write(f"SOUR0:WAV:SWE:STEP {self.step_size}")
+            self.write("SOUR0:WAV:SWE:REP ONEW")
+            self.write("SOUR0:WAV:SWE:CYCL 1")
+            self.write("SOUR0:WAV:SWE:LLOG 0")  # not used in STEP mode
+
+            # Internal triggering: Step-Finished out
+            self.write(f"TRIG0:OUTP STF")
+
+            # Power meter logging params
+            self.write("SENS1:FUNC 'POWer'")
+            self.write(f"SENS1:FUNC:PAR:LOGG {self.num_points},{avg_time_s}")
+
+            return True
+        except Exception:
+            _ = self.query("SYST:ERR?")
+            return False
+
+    def execute_step_sweep(self, timeout_s: float = 300) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Execute previously prepared STEP sweep (no LLOG).
+        Returns (wl_nm, ch1_dbm, ch2_dbm).
+        """
+        import numpy as _np
+        t0 = time.time()
+
+        self.write("SENS1:FUNC:STAT LOGG,START")
+        self.write("SOUR0:WAV:SWE:STAT START")
+
+        while (time.time() - t0) < timeout_s:
+            swe = self.query("SOUR0:WAV:SWE:STAT?").strip()
+            fun = self.query("SENS1:CHAN1:FUNC:STAT?").strip()
+            if "COMPLETE" in fun:
+                break
+            if "0" in swe:
+                break
+            time.sleep(0.5)
+
+        ch1 = self._query_binary_block("SENS1:CHAN1:FUNC:RES?", dtype="<f4")
+        time.sleep(0.2)
+        ch2 = self._query_binary_block("SENS1:CHAN2:FUNC:RES?", dtype="<f4")
+
+        # Build wavelength vector from start/stop/step and the actual number of samples returned
+        wl_nm = _np.linspace(self.start_wavelength * 1e9, self.stop_wavelength * 1e9, len(ch1))
+
+        # Align lengths and return
+        n = min(len(wl_nm), len(ch1), len(ch2))
+        return wl_nm[:n], ch1[:n], ch2[:n]
+
     def _preflight_cleanup(self) -> None:
         try: self.write("SENS1:CHAN1:FUNC:STAT LOGG,STOP")
         except: pass
