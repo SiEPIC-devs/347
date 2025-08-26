@@ -217,7 +217,7 @@ class NIR8164(LaserHAL):
         self, start_nm: float, stop_nm: float, step_nm: float,
         laser_power_dbm: float, num_scans: int = 0
         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        from NIR.optim_lambda import HP816xLambdaScan
+        from NIR.sweep import HP816xLambdaScan
         
         step_pm = float(step_nm) * 1000.0
         try:
