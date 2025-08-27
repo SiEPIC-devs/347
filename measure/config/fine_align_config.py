@@ -22,7 +22,8 @@ class FineAlignConfiguration:
             'scan_window': self.scan_window,
             'threshold': self.threshold,
             'max_gradient_iters': self.max_gradient_iters,
-            'use_crosshair': self.use_crosshair
+            'use_crosshair': self.use_crosshair,
+            'primary_detector': self.use_crosshair
         }
     
     @classmethod
