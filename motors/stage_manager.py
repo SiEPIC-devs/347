@@ -11,35 +11,24 @@ from motors.stage_controller import StageController
 from motors.hal.stage_factory import create_driver
 from motors.config.stage_config import StageConfiguration
 from motors.utils.shared_memory import *
+from utils.logging_helper import setup_logger
 
 """
-Simplified Stage Manager - Fixed Implementation
 Cameron Basara, 2025
-
-Key simplifications:
-- Removed complex decorators and mixed responsibilities  
-- Clear separation of concerns
-- Simple event handling
-- Reliable shared memory management
-- Easy to understand control flow
+Stage manager to control controllers dynamically
 """
 
 logger = logging.getLogger(__name__)
 
 class StageManager:
-    """
-    Simplified stage manager with clear responsibilities:
-    1. Motor lifecycle management (connect/disconnect)
-    2. High-level movement coordination  
-    3. Position monitoring and shared memory updates
-    4. Event handling and forwarding
-    """
-    
-    def __init__(self, config: StageConfiguration, create_shm: bool = True):
+    def __init__(self, config: StageConfiguration, create_shm: bool = True, debug: bool = False):
         # Core components
         self.config = config
         self.motors: Dict[AxisType, StageController] = {}
         self._event_callbacks: List[Callable[[MotorEvent], None]] = []
+        
+        # Setup logger
+        self.logger = setup_logger("StageManager", "Motors", debug_mode=debug)
         
         # State tracking
         self._last_positions: Dict[AxisType, float] = {}
@@ -62,7 +51,6 @@ class StageManager:
         self._position_task = None
 
     # === Context Management ===
-    
     async def __aenter__(self):
         """Async context manager entry"""
         return self
@@ -117,7 +105,6 @@ class StageManager:
         logger.info("Stage manager shutdown complete")
 
     # === Motor Lifecycle ===
-    
     async def initialize_axis(self, axis: AxisType) -> bool:
         """Initialize a single axis"""
         try:
@@ -214,13 +201,16 @@ class StageManager:
             motor = self.motors[axis]
             
             if relative:
-                success = await motor.move_relative(
+                new_pos = await motor.move_relative(
                     distance=position,
                     velocity=velocity,
                     wait_for_completion=wait_for_completion
                 )
-                if success:
-                    self._last_positions[axis] += position
+                if new_pos is not None:
+                    self._last_positions[axis] = new_pos
+                    success = True
+                else:
+                    success = False
             else:
                 success = await motor.move_absolute(
                     position=position,
@@ -373,9 +363,12 @@ class StageManager:
     async def get_all_positions(self) -> Dict[AxisType, float]:
         """Get positions of all axes"""
         positions = {}
-        for axis in self.motors:
-            pos = await self.get_position(axis)
-            positions[axis] = pos.actual if pos else 0.0
+        try:
+            for axis in self.motors:
+                pos = await self.get_position(axis)
+                positions[axis] = pos.actual if pos else 0.0
+        except Exception as e:
+            self.logger.error(f"Failed to get all positions: {e}")
         return positions
 
     async def get_state(self, axis: AxisType) -> Optional[MotorState]:
@@ -391,34 +384,48 @@ class StageManager:
 
     async def is_any_moving(self) -> bool:
         """Check if any axis is moving"""
-        for motor in self.motors.values():
-            try:
-                if await motor.is_moving():
-                    return True
-            except Exception:
-                pass
+        try:
+            for motor in self.motors.values():
+                try:
+                    if await motor.is_moving():
+                        return True
+                except Exception as e:
+                    self.logger.debug(f"Error checking motor movement: {e}")
+        except Exception as e:
+            self.logger.error(f"Failed to check if any motor is moving: {e}")
         return False
 
     async def wait_for_all_complete(self, timeout: float = 60.0) -> bool:
         """Wait for all moves to complete"""
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            if not await self.is_any_moving():
-                return True
-            await asyncio.sleep(0.1)
-        return False
+        try:
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                if not await self.is_any_moving():
+                    return True
+                await asyncio.sleep(0.1)
+            self.logger.warning(f"Timeout waiting for motors to complete after {timeout}s")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error waiting for moves to complete: {e}")
+            return False
 
     # === Event Handling ===
     
     def add_event_callback(self, callback: Callable[[MotorEvent], None]):
         """Add event callback"""
-        if callback not in self._event_callbacks:
-            self._event_callbacks.append(callback)
+        try:
+            if callback not in self._event_callbacks:
+                self._event_callbacks.append(callback)
+        except Exception as e:
+            self.logger.error(f"Failed to add event callback: {e}")
 
     def remove_event_callback(self, callback: Callable[[MotorEvent], None]):
         """Remove event callback"""
-        if callback in self._event_callbacks:
-            self._event_callbacks.remove(callback)
+        try:
+            if callback in self._event_callbacks:
+                self._event_callbacks.remove(callback)
+        except Exception as e:
+            self.logger.error(f"Failed to remove event callback: {e}")
 
     def _handle_motor_event(self, event: MotorEvent):
         """Handle events from motor controllers"""

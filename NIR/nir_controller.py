@@ -89,41 +89,59 @@ class NIR8164(LaserHAL):
     # Laser functions
     ######################################################################
 
-    def configure_units(self) -> None:
-        """Configured nir to dBm"""
-        self.write("SOUR0:POW:UNIT 0")
-        self.write("SENS1:CHAN1:POW:UNIT 0")
-        self.write("SENS1:CHAN2:POW:UNIT 0")
-        _ = self.query("SOUR0:POW:UNIT?")
-        _ = self.query("SENS1:CHAN1:POW:UNIT?")
-        _ = self.query("SENS1:CHAN2:POW:UNIT?")
-
-    def set_wavelength(self, nm: float) -> None:
+    def configure_units(self) -> bool:
+        """Configured nir to dBm""" 
+        try:
+            self.write("SOUR0:POW:UNIT 0")
+            self.write("SENS1:CHAN1:POW:UNIT 0")
+            self.write("SENS1:CHAN2:POW:UNIT 0")
+            _ = self.query("SOUR0:POW:UNIT?")
+            _ = self.query("SENS1:CHAN1:POW:UNIT?")
+            _ = self.query("SENS1:CHAN2:POW:UNIT?")
+            return True
+        except Exception as e:
+            return False
+    def set_wavelength(self, nm: float) -> bool:
         """Set wl in nm"""
-        self.write(f"SOUR0:WAV {nm*1e-9}")
-
-    def get_wavelength(self) -> float:
+        try:
+            self.write(f"SOUR0:WAV {nm*1e-9}")
+            return True
+        except Exception as e:
+            return False
+    def get_wavelength(self) -> Optional[float]:
         """Get wl in nm"""
-        v = self.query("SOUR0:WAV?")
-        x = float(v)
-        return x*1e9 if x < 1e-3 else x
-
-    def set_power(self, dbm: float) -> None:
+        try:
+            v = self.query("SOUR0:WAV?")
+            x = float(v)
+            return x*1e9 if x < 1e-3 else x
+        except:
+            return None
+        
+    def set_power(self, dbm: float) -> bool:
         """Set power in dBm"""
-        self.write("SOUR0:POW:UNIT 0")
-        self.write(f"SOUR0:POW {dbm}")
-
-    def get_power(self) -> float:
+        try:
+            self.write("SOUR0:POW:UNIT 0")
+            self.write(f"SOUR0:POW {dbm}")
+            return True
+        except:
+            return False
+    def get_power(self) -> Optional[float]:
         """Get power in dBm"""
-        self.write("SOUR0:POW:UNIT 0")
-        v = self.query("SOUR0:POW?")
-        return float(v)
-
-    def enable_output(self, on: bool) -> None:
+        try:
+            self.write("SOUR0:POW:UNIT 0")
+            v = self.query("SOUR0:POW?")
+            return float(v)
+        except:
+            return False
+        
+    def enable_output(self, on: bool) -> bool:
         """Turn laser on and off"""
-        self.write(f"SOUR0:POW:STAT {'ON' if on else 'OFF'}")
-
-    def get_output_state(self):
+        try:
+            self.write(f"SOUR0:POW:STAT {'ON' if on else 'OFF'}")
+            return True
+        except:
+            return False
+    def get_output_state(self) -> bool:
         state = self.query("SOUR0:POW:STAT?")
         state = "1" in state
         return state
@@ -137,23 +155,30 @@ class NIR8164(LaserHAL):
         Set Detector units
             unit[int]: 0 dBm, 1 W
         """
-        self.write(f"SENS1:CHAN1:POW:UNIT {units}")
-        self.write(f"SENS1:CHAN2:POW:UNIT {units}")
-
-    def get_detector_units(self) -> None:
+        try:
+            self.write(f"SENS1:CHAN1:POW:UNIT {units}")
+            self.write(f"SENS1:CHAN2:POW:UNIT {units}")
+            return True
+        except:
+            return False
+    def get_detector_units(self) -> Optional[Tuple]:
         """Set Detector units"""
-        _ = self.query("SENS1:CHAN1:POW:UNIT?")
-        _ = self.query("SENS1:CHAN2:POW:UNIT?")
-
-
-    def read_power(self) -> Tuple[float, float]:
+        try:
+            ch1 = self.query("SENS1:CHAN1:POW:UNIT?")
+            ch2 = self.query("SENS1:CHAN2:POW:UNIT?")
+            return ch1, ch2
+        except:
+            return False
+    def read_power(self) -> Optional[Tuple[float, float]]:
         """
         Read power from each chan with unit configured
         """
-        p1 = self.query("FETC1:CHAN1:POW?")
-        p2 = self.query("FETC1:CHAN2:POW?")
-        return float(p1), float(p2)
-
+        try:
+            p1 = self.query("FETC1:CHAN1:POW?")
+            p2 = self.query("FETC1:CHAN2:POW?")
+            return float(p1), float(p2)
+        except:
+            return False
     def enable_autorange(self, enable: bool = True, channel: int = 1) -> bool:
         """Enable/disable autorange """
         try:
@@ -204,9 +229,13 @@ class NIR8164(LaserHAL):
     def start_sweep(self) -> None:
         self.write("SOUR0:WAV:SWE:STAT START")
 
-    def stop_sweep(self) -> None:
-        self.write("SOUR0:WAV:SWE:STAT STOP")
-
+    def stop_sweep(self) -> bool:
+        try:
+            self.write("SOUR0:WAV:SWE:STAT STOP")
+            return True
+        except:
+            return False
+        
     def get_sweep_state(self) -> str:
         return self.query("SOUR0:WAV:SWE:STAT?")
 
@@ -287,6 +316,7 @@ class NIR8164(LaserHAL):
         pass
     def set_power_unit(self, unit, channel = 1):
         pass
+    
 # Register driver
 from NIR.hal.nir_factory import register_driver
 register_driver("347_NIR", NIR8164)
