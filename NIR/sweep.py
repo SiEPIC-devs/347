@@ -2,7 +2,7 @@ import ctypes
 import numpy as np
 import pyvisa
 import pandas as pd
-from ctypes import c_double, c_int32, c_uint32, c_char, c_char_p, POINTER, byref, create_string_buffer  # <<< added c_char, create_string_buffer
+from ctypes import c_double, c_int32, c_uint32, c_char, c_char_p, POINTER, byref, create_string_buffer  
 from tqdm import tqdm
 import time
 
@@ -177,6 +177,7 @@ class HP816xLambdaScan:
         # Segment loop
         bottom = float(start_nm)
         for seg in tqdm(range(segments), desc="Lambda Scan Stitching", unit="seg"):
+            if self._cancel: break
             planned_top = bottom + (eff_points_budget - 1) * step_nm
             top = min(planned_top, float(stop_nm))
 
@@ -291,6 +292,7 @@ class HP816xLambdaScan:
 
         bottom = float(start_nm)
         for seg in tqdm(range(segments), desc="Lambda Scan Stitching", unit="seg"):
+            if self._cancel: break
             planned_top = bottom + (eff_points_budget - 1) * step_nm
             top = min(planned_top, float(stop_nm))
 
@@ -323,7 +325,6 @@ class HP816xLambdaScan:
                 bottom = top + step_nm
                 continue
             if C != len(channels):
-                # Not fatal; still map slot order → labels you provided
                 pass
 
             # -------- ALLOCATE BUFFERS FOR EXECUTE --------
@@ -405,7 +406,21 @@ class HP816xLambdaScan:
             'channels_dbm': channels_dbm,
             'num_points': int(n_target)
         }
-    
+
+    def _visa_write_raw(self, scpi: str) -> int:
+        # viWrite(ViSession, ViBuf, ViUInt32, ViPUInt32)
+        self.visa_lib.viWrite.argtypes = [c_uint32, c_char_p, c_uint32, POINTER(c_uint32)]
+        self.visa_lib.viWrite.restype  = c_int32
+        buf = (scpi + "\n").encode("ascii")
+        retcnt = c_uint32(0)
+        return int(self.visa_lib.viWrite(c_uint32(self.session), c_char_p(buf), c_uint32(len(buf)), byref(retcnt)))
+
+    def cancel(self):
+        """Request cancellation: set flag and tell TLS to STOP sweeping via SCPI over the same VISA session."""
+        self._cancel = True
+        self._visa_write_raw(":SOUR:WAV:SWE:STATe STOP")
+        self._visa_write_raw("*CLS") 
+
     def disconnect(self):
         if self.session:
             self.lib.hp816x_close(self.session)
@@ -427,4 +442,4 @@ class HP816xLambdaScan:
 #     inst.disconnect()
 
 # if __name__ == "__main__":
-#     main()
+#      main()
