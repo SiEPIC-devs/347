@@ -317,7 +317,7 @@ class NIRManager:
 ######################################################################
 # Sweep methods
 ######################################################################
-    def sweep(self, start_nm, stop_nm, step_nm, laser_power_dbm, averaging_time_s=0.02):
+    def sweep(self, start_nm, stop_nm, step_nm, laser_power_dbm, num_scans=0):
         """
         Execute a lambda scan, auto stitches longer measurements (>20,001 points)
         params:
@@ -335,7 +335,7 @@ class NIRManager:
             # (wavelengths[nm], channel1[dBm], channel2[dBm])
             results = self.controller.optical_sweep(
                 start_nm, stop_nm, step_nm, laser_power_dbm,
-                averaging_time_s=0.02)
+                num_scans)
             self.controller.cleanup_scan()
             
             if results is not None:
