@@ -35,6 +35,7 @@ class NIR8164(LaserHAL):
         self.step_size = None
         self.num_points = None
         self.laser_power = None
+        self.sweep_module = False
 
     def connect(self) -> bool:
         try:
@@ -255,6 +256,7 @@ class NIR8164(LaserHAL):
             pass
 
         hp = HP816xLambdaScan()
+        self.sweep_module = hp
         try:
             ok = hp.connect()
             if not ok:
@@ -271,6 +273,7 @@ class NIR8164(LaserHAL):
         finally:
             try:
                 hp.disconnect()
+                self.sweep_module = False
             except Exception:
                 pass
 
@@ -280,7 +283,16 @@ class NIR8164(LaserHAL):
         ch2 = np.asarray(chs[1], dtype=np.float64) if len(chs) >= 2 else np.full_like(wl, np.nan)
 
         return wl, ch1, ch2
-   
+    def sweep_cancel(self):
+        try:
+            if not self.sweep_module:
+                raise RuntimeError("HP816xLambdaScan not connected")
+            else:
+                self.sweep_module.cancel()
+                return True
+        except:
+            return False
+        
     def _preflight_cleanup(self) -> None:
         try: 
             self.write("SENS1:CHAN1:FUNC:STAT LOGG,STOP")
