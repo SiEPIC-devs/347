@@ -349,6 +349,26 @@ class NIRManager:
             self._log(f"Lambda scan error: {e}", "error")
             return None, None, None
     
+    def cancel_sweep(self):
+        try:
+            if not self.controller or not self._connected:
+                self._log("Controller not connected", "error")
+                return None
+            
+            # (wavelengths[nm], channel1[dBm], channel2[dBm])
+            results = self.controller.sweep_cancel()
+            self.controller.cleanup_scan()
+            
+            if results is not None:
+                self._log("Lambda scan Interrupted")
+                return True 
+            else:
+                self._log("Lambda scan interrupt failed", "error")
+                return False
+            
+        except Exception as e:
+            self._log(f"Lambda scan error: {e}", "error")
+            return False 
 
 ######################################################################
 # Configuration
