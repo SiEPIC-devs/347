@@ -114,8 +114,8 @@ class HP816xLambdaScan:
         except Exception as e:
             logging.error(f"[LSC] Connection error: {e}")
             return False
-    def lambda_scan(self, start_nm: float=1490, stop_nm: float=1600, step_pm: float=0.5,
-                    power_dbm: float=3.0, num_scans: int=0, channels: list=[1,2]):
+    def lambda_scan_mf(self, start_nm: float=1490, stop_nm: float=1600, step_pm: float=0.5,
+                    power_dbm: float=3.0, num_scans: int=0, channels: list=[0,1]):
         if not self.session:
             raise RuntimeError("Not connected to instrument")
         ##############################################################
@@ -222,7 +222,7 @@ class HP816xLambdaScan:
             # Per-array fetch into preallocated grid
             for ch in channels:
                 buf = (c_double * points_seg)()
-                res = self.lib.hp816x_getLambdaScanResult(self.session, 1, int(ch), -90.0, buf, wavelengths_seg)
+                res = self.lib.hp816x_getLambdaScanResult(self.session, int(ch), 1, -90.0, buf, wavelengths_seg)
                 if res != 0:
                     continue
                 pwr_full = np.ctypeslib.as_array(buf, shape=(points_seg,)).astype(np.float64)
@@ -253,7 +253,159 @@ class HP816xLambdaScan:
             'channels_dbm': channels_dbm,
             'num_points': int(n_target)
         } 
+    
+    def lambda_scan(self, start_nm: float=1490, stop_nm: float=1600, step_pm: float=0.5,
+           power_dbm: float=3.0, num_scans: int=0, channels: list=[1,2]):
+        if not self.session:
+            raise RuntimeError("Not connected to instrument")
 
+        # Constrain to instrument limits
+        start_nm = 1490 if start_nm < 1490 else start_nm
+        stop_nm  = 1640 if stop_nm  > 1640 else stop_nm
+        step_pm  = 0.1  if step_pm  < 0.1  else step_pm
+
+        # Convert to meters for DLL
+        step_nm = step_pm / 1000.0
+        start_wl = start_nm * 1e-9
+        stop_wl  = stop_nm  * 1e-9
+        step_m   = step_pm  * 1e-12
+
+        # Uniform output grid 
+        n_target = int(round((float(stop_nm) - float(start_nm)) / step_nm)) + 1
+        wl_target = start_nm + np.arange(n_target, dtype=np.float64) * step_nm
+
+        # Segmentation (accounting for 90 pm guard)
+        max_points_per_scan = 20001
+        guard_pre_pm, guard_post_pm = 90.0, 90.0
+        guard_total_pm = guard_pre_pm + guard_post_pm
+        guard_points = int(np.ceil(guard_total_pm / step_pm)) + 2
+        eff_points_budget = max_points_per_scan - guard_points
+        if eff_points_budget < 2:
+            raise RuntimeError("Step too large for guard-banded segmentation (eff_points_budget < 2).")
+
+        pts_est  = n_target
+        segments = max(1, int(np.ceil(pts_est / float(eff_points_budget))))
+
+        # Preallocate outputs
+        out_by_ch = {ch: np.full(n_target, np.nan, dtype=np.float64) for ch in channels}
+
+        bottom = float(start_nm)
+        for seg in tqdm(range(segments), desc="Lambda Scan Stitching", unit="seg"):
+            planned_top = bottom + (eff_points_budget - 1) * step_nm
+            top = min(planned_top, float(stop_nm))
+
+            bottom_r = bottom
+            top_r    = top
+
+            # -------- SINGLE-FRAME PREP --------
+            num_points_seg = c_uint32()
+            num_arrays_seg = c_uint32()
+            result = self.lib.hp816x_prepareLambdaScan(
+                self.session,
+                0,                      # powerUnit: 0=dBm
+                c_double(power_dbm),    # TLS setpoint
+                0,                      # opticalOutput: 0=HIGHPOW (change if LOWSSE/BHR/BLR)
+                c_int32(num_scans),     # 0->1 scan, 1->2 scans, etc.
+                c_int32(len(channels)), # PWMChannels = COUNT (NOT a mask)
+                c_double(bottom_r * 1e-9),
+                c_double(top_r    * 1e-9),
+                c_double(step_pm  * 1e-12),
+                byref(num_points_seg),
+                byref(num_arrays_seg)
+            )
+            if result != 0:
+                raise RuntimeError(f"Prepare scan failed: {result} :: {self._err_msg(result)}")
+
+            points_seg = int(num_points_seg.value)
+            C          = int(num_arrays_seg.value)
+            if C < 1:
+                # Nothing enabled; skip this segment
+                bottom = top + step_nm
+                continue
+            if C != len(channels):
+                # Not fatal; still map slot order → labels you provided
+                pass
+
+            # -------- ALLOCATE BUFFERS FOR EXECUTE --------
+            wl_buf = (c_double * points_seg)()
+
+            # Prepare up to 8 power array pointers; fill first C, NULL the rest
+            power_slots = [None]*8
+            power_arrays = {}
+            for i in range(C):                             # i: 0..C-1 maps to powerArray1..C
+                arr = (c_double * points_seg)()
+                power_slots[i] = arr
+                power_arrays[i+1] = arr                    # keep by slot index (1-based)
+
+            # Helper: NULL pointer for unused arrays
+            from ctypes import POINTER
+            def ptr_or_null(arr):
+                return arr if arr is not None else POINTER(c_double)()
+
+            # -------- SINGLE-FRAME EXECUTE (returns wl + all channels at once) --------
+            result = self.lib.hp816x_executeLambdaScan(
+                self.session,
+                wl_buf,
+                ptr_or_null(power_slots[0]),
+                ptr_or_null(power_slots[1]),
+                ptr_or_null(power_slots[2]),
+                ptr_or_null(power_slots[3]),
+                ptr_or_null(power_slots[4]),
+                ptr_or_null(power_slots[5]),
+                ptr_or_null(power_slots[6]),
+                ptr_or_null(power_slots[7]),
+            )
+            if result != 0:
+                raise RuntimeError(f"Execute scan failed: {result} :: {self._err_msg(result)}")
+
+            # -------- Convert wl + guard-trim + index into global grid --------
+            wl_seg_nm_full = np.ctypeslib.as_array(wl_buf, shape=(points_seg,)).copy() * 1e9
+            # Keep only [bottom_r, top_r] (drop 90 pm guards)
+            mask = (wl_seg_nm_full >= bottom_r - 1e-6) & (wl_seg_nm_full <= top_r + 1e-6)
+            if not np.any(mask):
+                bottom = top + step_nm
+                continue
+
+            wl_seg_nm = wl_seg_nm_full[mask]
+            idx = np.rint((wl_seg_nm - float(start_nm)) / step_nm).astype(np.int64)
+            valid = (idx >= 0) & (idx < n_target)
+            idx = idx[valid]
+
+            # -------- Map slot order (1..C) to 'channels' labels --------
+            # Example: if channels=[2,4], powerArray1->ch=2, powerArray2->ch=4
+            for slot_i, ch_label in enumerate(channels, start=1):
+                if slot_i > C:
+                    break
+                arr = power_arrays[slot_i]
+                pwr_full = np.ctypeslib.as_array(arr, shape=(points_seg,)).copy()  # copy: decouple
+                pwr_seg = pwr_full[mask][valid]
+
+                if pwr_seg.size != idx.size:
+                    m = min(pwr_seg.size, idx.size)
+                    if m > 0:
+                        out_by_ch[ch_label][idx[:m]] = pwr_seg[:m]
+                else:
+                    out_by_ch[ch_label][idx] = pwr_seg
+
+            if top >= float(stop_nm) - 1e-12:
+                break
+            bottom = top + step_nm
+
+        # Fill last sample if instrument left it NaN after stitching
+        for ch in channels:
+            if n_target >= 2 and np.isnan(out_by_ch[ch][-1]):
+                nz = np.where(~np.isnan(out_by_ch[ch]))[0]
+                if nz.size:
+                    out_by_ch[ch][-1] = out_by_ch[ch][nz[-1]]
+
+        channels_dbm = [out_by_ch[ch] for ch in channels]
+        return {
+            'wavelengths_nm': wl_target,
+            'channels': channels,
+            'channels_dbm': channels_dbm,
+            'num_points': int(n_target)
+        }
+    
     def disconnect(self):
         if self.session:
             self.lib.hp816x_close(self.session)
