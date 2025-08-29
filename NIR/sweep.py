@@ -416,7 +416,6 @@ class HP816xLambdaScan:
         return int(self.visa_lib.viWrite(c_uint32(self.session), c_char_p(buf), c_uint32(len(buf)), byref(retcnt)))
 
     def cancel(self):
-        """Request cancellation: set flag and tell TLS to STOP sweeping via SCPI over the same VISA session."""
         self._cancel = True
         self._visa_write_raw(":SOUR:WAV:SWE:STATe STOP")
         self._visa_write_raw("*CLS") 

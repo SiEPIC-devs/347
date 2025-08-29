@@ -7,7 +7,7 @@ def main():
     COM_PORT = 3          # Prologix / USB-Serial port number
     GPIB_ADDR = 20        # HP816x frame address
     START_NM = 1530.00
-    STOP_NM  = 1530.05
+    STOP_NM  = 1555.00
     STEP_NM  = 0.01
     POWER_DBM = 1.0
 
@@ -61,10 +61,9 @@ def main():
     print(f"sweep done. points={n}")
     if n:
         print(f"wl range: {wl[0]:.6f} → {wl[-1]:.6f} nm | step≈{np.median(np.diff(wl)):.6f} nm")
-        print(f"ch1 first 5: {np.array2string(ch1[:5], precision=3)}")
+        print(f"ch1 first 5: {np.array2string(ch1[:], precision=3)}")
         if ch2 is not None and ch2.size == n:
-            print(f"ch2 first 5: {np.array2string(ch2[:5], precision=3)}")
-
+            print(f"ch2 first 5: {np.array2string(ch2[:], precision=3)}")
     # optional: disable output after
     if hasattr(ctrl, "enable_output"):
         try:
