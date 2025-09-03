@@ -13,7 +13,9 @@ logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
 pyvisa_logger = logging.getLogger('pyvisa')
 pyvisa_logger.setLevel(logging.WARNING)
 
-
+"""
+Cameron Basara, 2025
+"""
 
 class HP816xLambdaScan:
     def __init__(self):
@@ -299,7 +301,7 @@ class HP816xLambdaScan:
             bottom_r = bottom
             top_r    = top
 
-            # -------- SINGLE-FRAME PREP --------
+            #  SINGLE-FRAME PREP 
             num_points_seg = c_uint32()
             num_arrays_seg = c_uint32()
             result = self.lib.hp816x_prepareLambdaScan(
@@ -327,7 +329,7 @@ class HP816xLambdaScan:
             if C != len(channels):
                 pass
 
-            # -------- ALLOCATE BUFFERS FOR EXECUTE --------
+            #  ALLOCATE BUFFERS FOR EXECUTE 
             wl_buf = (c_double * points_seg)()
 
             # Prepare up to 8 power array pointers; fill first C, NULL the rest
@@ -343,7 +345,7 @@ class HP816xLambdaScan:
             def ptr_or_null(arr):
                 return arr if arr is not None else POINTER(c_double)()
 
-            # -------- SINGLE-FRAME EXECUTE (returns wl + all channels at once) --------
+            #  SINGLE-FRAME EXECUTE (returns wl + all channels at once) 
             result = self.lib.hp816x_executeLambdaScan(
                 self.session,
                 wl_buf,
@@ -359,7 +361,7 @@ class HP816xLambdaScan:
             if result != 0:
                 raise RuntimeError(f"Execute scan failed: {result} :: {self._err_msg(result)}")
 
-            # -------- Convert wl + guard-trim + index into global grid --------
+            #  Convert wl + guard-trim + index into global grid 
             wl_seg_nm_full = np.ctypeslib.as_array(wl_buf, shape=(points_seg,)).copy() * 1e9
             # Keep only [bottom_r, top_r] (drop 90 pm guards)
             mask = (wl_seg_nm_full >= bottom_r - 1e-6) & (wl_seg_nm_full <= top_r + 1e-6)
@@ -372,7 +374,7 @@ class HP816xLambdaScan:
             valid = (idx >= 0) & (idx < n_target)
             idx = idx[valid]
 
-            # -------- Map slot order (1..C) to 'channels' labels --------
+            #  Map slot order (1..C) to 'channels' labels 
             # Example: if channels=[2,4], powerArray1->ch=2, powerArray2->ch=4
             for slot_i, ch_label in enumerate(channels, start=1):
                 if slot_i > C:

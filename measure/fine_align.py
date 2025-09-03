@@ -6,7 +6,7 @@ from motors.stage_manager import StageManager
 from motors.hal.motors_hal import AxisType
 from NIR.nir_manager import NirManager
 
-from utils.logging_helper import setup_logger, log
+from utils.logging_helper import setup_logger
 logger = setup_logger
 
 """
